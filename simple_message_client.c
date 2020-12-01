@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <netdb.h>
 #include "simple_message_client_commandline_handling.h" // mus noch zu <simple...> geändert werden
 #include <stdio.h>
@@ -44,6 +45,7 @@ int main(int argc, const char * const*argv) {
         strcat(request, user);
         strcat(request, "\n");
         strcat(request, message);
+        strcat(request, "\n"); // unbedingt notwendig
     } else { // img_url != NULL
         strcpy(request, "user=");
         strcat(request, user);
@@ -52,6 +54,7 @@ int main(int argc, const char * const*argv) {
         strcat(request, img_url);
         strcat(request, "\n");
         strcat(request, message);
+        strcat(request, "\n"); // unbedingt notwendig
     }
 
     memset(&hints, 0, sizeof(struct addrinfo));
@@ -79,49 +82,47 @@ int main(int argc, const char * const*argv) {
     freeaddrinfo(result);
 
     if (res_ptr == NULL) {
-        // error
+        // error: client failed to connect
+        exit(EXIT_FAILURE);
     }
 
     if ((socket_fd_read = dup(socket_fd_write)) == -1) {
         // error
+        exit(EXIT_FAILURE);
     }
 
     if ((file_ptr_write = fdopen(socket_fd_write, "w")) == NULL) {
         // error
         fprintf(stderr, "file_ptr_write ist NULL\n");
+        exit(EXIT_FAILURE);
     }
 
     if ((file_ptr_read = fdopen(socket_fd_read, "r")) == NULL) {
         // error
+        exit(EXIT_FAILURE);
     }
 
     // line-buffering einstellen
-    // setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
-    // setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
+    setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
+    setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
 
-    // vl keine while (1) Schleife notwendig, da der client nur einmal Daten schickt?!
-    while (TRUE) {
-        fprintf(file_ptr_write, "%s", request);
+    fprintf(file_ptr_write, "%s", request); // oder vl besser fputs()
 
-        fgets(reply, sizeof(reply), file_ptr_read);
-        // write request
-        // dann read reply, wenn EOF dann shutdown(write)
-        // kein write mehr aber weiterhin read
-        // wenn EOF gelesen wird dann close (EOF wird bei shutdown oder close gesendet)
-    }
-
-    // nach dem reply
     if (fflush(file_ptr_write) != 0) { // 
         // error
     }
 
-    if (shutdown(fileno(file_ptr_write), SHUT_WR) == -1) {
+    if (shutdown(fileno(file_ptr_write), SHUT_WR) == -1) { // sendet offenbar EOF
         // error
     }
 
+    fgets(reply, sizeof(reply), file_ptr_read);
+    printf("nach dem reply\n");
+
+    // close() zweimal
 
     return EXIT_SUCCESS;
-} // end main
+} // end main()
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode) {
@@ -134,4 +135,4 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
     -v, --verbose           verbose output\n\t\
     -h, --help\n", cmnd);
     exit(exitcode);
-} // end usage
+} // end usage()

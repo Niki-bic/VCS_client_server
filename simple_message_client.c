@@ -8,13 +8,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUF_LEN 1024
+#define BUF_LEN 100000
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
 
 
-int main(int argc, const char * const*argv) {
+int main(const int argc, const char * const*argv) {
     const char *server = NULL;
     const char *port = NULL;
     const char *user = NULL;
@@ -23,8 +23,6 @@ int main(int argc, const char * const*argv) {
     int verbose = 0;
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
-
-    // printf("%s %s %s %s %s\n", server, port, user, message, img_url);
 
     struct addrinfo hints;
     struct addrinfo *result = NULL;
@@ -37,7 +35,7 @@ int main(int argc, const char * const*argv) {
     FILE *file_ptr_read = NULL;
 
     char request[BUF_LEN] = {'\0'};
-    char reply[BUF_LEN] = {'\0'};
+    int reply[BUF_LEN] = {'\0'}; // ws kein char-Buffer sondern besser was anderes, sind ja gemischte Daten
 
     // eventuell in eine Funktion auslagern und error-checking, sowie strncpy stats strcpy sowie strncat statt strcat
     if (img_url == NULL) {
@@ -97,14 +95,14 @@ int main(int argc, const char * const*argv) {
         exit(EXIT_FAILURE);
     }
 
-    if ((file_ptr_read = fdopen(socket_fd_read, "r")) == NULL) {
+    if ((file_ptr_read = fdopen(socket_fd_read, "rb")) == NULL) {
         // error
         exit(EXIT_FAILURE);
     }
 
     // line-buffering einstellen
-    setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
-    setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
+    // setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
+    // setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
 
     fprintf(file_ptr_write, "%s", request); // oder vl besser fputs()
 
@@ -116,10 +114,23 @@ int main(int argc, const char * const*argv) {
         // error
     }
 
-    fgets(reply, sizeof(reply), file_ptr_read);
-    printf("nach dem reply\n");
+    // einlesen des reply
+    int c = 0;
+    int i = 0;
+    while (c != EOF) {
+        c = fgetc(file_ptr_read);
+        reply[i] = c;
+        i++;
+    }
 
     // close() zweimal
+    if (close(socket_fd_read) == -1) {
+        // error
+    }
+
+    if (close(socket_fd_write) == -1) {
+        // error
+    }
 
     return EXIT_SUCCESS;
 } // end main()

@@ -35,7 +35,7 @@ int main(const int argc, const char * const*argv) {
     FILE *file_ptr_read = NULL;
 
     char request[BUF_LEN] = {'\0'};
-    int reply[BUF_LEN] = {'\0'}; // ws kein char-Buffer sondern besser was anderes, sind ja gemischte Daten
+    char reply[BUF_LEN] = {'\0'}; // ws kein char-Buffer sondern besser was anderes, sind ja gemischte Daten
 
     // eventuell in eine Funktion auslagern und error-checking, sowie strncpy stats strcpy sowie strncat statt strcat
     if (img_url == NULL) {
@@ -115,12 +115,18 @@ int main(const int argc, const char * const*argv) {
     }
 
     // einlesen des reply
-    int c = 0;
     int i = 0;
-    while (c != EOF) {
-        c = fgetc(file_ptr_read);
-        reply[i] = c;
+    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_ptr_read) != 0) {
         i++;
+    }
+    printf("%s", reply);
+
+    if (fclose(file_ptr_read) == -1) {
+        // error
+    }
+    
+    if (fclose(file_ptr_write) == -1) {
+        // error
     }
 
     // close() zweimal

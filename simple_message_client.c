@@ -1,4 +1,13 @@
-#include <ctype.h>
+// todo:
+// wie lang muss BUF_LEN sei, d.h. wie lang kann der reply sein?
+// error-checking, errno einbauen, Ressourcen im Fehlerfall richtig wergräumen
+// d.h. Deskriptoren schließen, File-Pointer schließen etc
+// ausprobieren ob -i (bzw -image) funktioniert
+// testcases checken
+// eventuell modularer aufbauen, auslagern was auch der server braucht
+// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhautp geschossen werden
+
+
 #include <errno.h>
 #include <netdb.h>
 #include "simple_message_client_commandline_handling.h" // mus noch zu <simple...> geändert werden
@@ -9,11 +18,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUF_LEN 100000
+#define BUF_LEN 100000 // noch überlegen wie lang notwendig
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
-int handle_reply(char *reply);
+long handle_reply(char *reply);
 
 
 int main(const int argc, const char * const*argv) {
@@ -123,7 +132,7 @@ int main(const int argc, const char * const*argv) {
         exit(EXIT_FAILURE);
     }
 
-    // line-buffering einstellen
+    // line-buffering einstellen?
     // setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
     // setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
 
@@ -150,7 +159,7 @@ int main(const int argc, const char * const*argv) {
         i++;
     }
 
-    int status = handle_reply(reply);
+    long status = handle_reply(reply);
 
     if (fclose(file_read) == -1) {
         // error        
@@ -160,7 +169,7 @@ int main(const int argc, const char * const*argv) {
         // error
     }
 
-    // close() zweimal
+    // close() zweimal?
     if (close(socket_read) == -1) {
         // error
     }
@@ -186,8 +195,8 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 } // end usage()
 
 
-int handle_reply(char *reply) {
-    int status = 0;
+long handle_reply(char *reply) {
+    long status = 0;
     int len = 0;
     char *pointer = reply;
     char filename[BUF_LEN] = {'\0'}; // gefällt mir noch nicht ganz

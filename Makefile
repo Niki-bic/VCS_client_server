@@ -24,9 +24,9 @@ RM     =  rm -f
 # filenames:
 
 EXEC   = simple_message_client simple_message_server
-SRC    = simple_message_client.c simple_message_server.c functions.c
+SRC    = simple_message_client.c simple_message_server.c
 OBJ    = $(SRC:.c=.o)
-HEADER = client_server.h
+# HEADER = client_server.h
 DOC    = doc
 DOXY   = doxygen
 DFILE  = Doxyfile
@@ -53,13 +53,13 @@ cleanall:
 
 # rules:
 
-simple_message_client: simple_message_client.o functions.o
+simple_message_client: simple_message_client.o
 	$(CC) -o $@  $^  $(TFLAGS)
 
-simple_message_server: simple_message_server.o functions.o
+simple_message_server: simple_message_server.o
 	$(CC) -o $@  $^  $(TFLAGS)
 
-%.o: %.c $(HEADER)
+%.o: %.c # $(HEADER)
 	$(CC) $(CFLAGS)  $<
 
 # --------------------------------------------------------------------------

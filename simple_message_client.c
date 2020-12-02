@@ -6,11 +6,12 @@
 // testcases checken
 // eventuell modularer aufbauen, auslagern was auch der server braucht
 // richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhautp geschossen werden
+// -h einbauen
 
 
 #include <errno.h>
 #include <netdb.h>
-#include "simple_message_client_commandline_handling.h" // mus noch zu <simple...> geändert werden
+#include <simple_message_client_commandline_handling.h> // mus noch zu <simple...> geändert werden
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,7 +26,7 @@ void usage(FILE *stream, const char *cmnd, int exitcode);
 long handle_reply(char *reply);
 
 
-int main(const int argc, const char * const*argv) {
+int main(const int argc, const char * const *argv) {
     const char *server = NULL;
     const char *port = NULL;
     const char *user = NULL;
@@ -47,14 +48,14 @@ int main(const int argc, const char * const*argv) {
 
     int request_len = 0;
     char *request = NULL;
-    // char request[BUF_LEN] = {'\0'};
-    char reply[BUF_LEN] = {'\0'}; // ws kein char-Buffer sondern besser was anderes, sind ja gemischte Daten
+    char reply[BUF_LEN] = {'\0'};
 
     request_len = strlen("user=") + strlen(user) + 1 + strlen(message) + 2;
 
     // eventuell in eine Funktion auslagern und error-checking, sowie strncpy stats strcpy sowie strncat statt strcat
     if (img_url == NULL) {
         request = (char *) calloc(request_len, sizeof(char));
+
         if (request == NULL) {
             // error
             exit(EXIT_FAILURE);
@@ -68,6 +69,7 @@ int main(const int argc, const char * const*argv) {
     } else { // img_url != NULL
         request_len += strlen("img=") + strlen(img_url) + 1;
         request = (char *) calloc(request_len, sizeof(char));
+
         if (request == NULL) {
             // error
             exit(EXIT_FAILURE);
@@ -178,7 +180,7 @@ int main(const int argc, const char * const*argv) {
         // error
     }
 
-    return EXIT_SUCCESS;
+    return status;
 } // end main()
 
 
@@ -197,7 +199,7 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 
 long handle_reply(char *reply) {
     long status = 0;
-    int len = 0;
+    unsigned long len = 0;
     char *pointer = reply;
     char filename[BUF_LEN] = {'\0'}; // gefällt mir noch nicht ganz
     FILE *file = NULL;
@@ -256,3 +258,4 @@ long handle_reply(char *reply) {
 
     return status;
 } // end handle_reply()
+

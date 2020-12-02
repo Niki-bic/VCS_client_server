@@ -2,16 +2,16 @@
 // wie lang muss BUF_LEN sei, d.h. wie lang kann der reply sein?
 // error-checking, errno einbauen, Ressourcen im Fehlerfall richtig wergräumen
 // d.h. Deskriptoren schließen, File-Pointer schließen etc
-// ausprobieren ob -i (bzw -image) funktioniert
+// ausprobieren ob -i (bzw -image) funktioniert  -- DONE
 // testcases checken
 // eventuell modularer aufbauen, auslagern was auch der server braucht
 // richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhautp geschossen werden
-// -h einbauen
+// -h einbauen -- DONE
 
 
 #include <errno.h>
 #include <netdb.h>
-#include <simple_message_client_commandline_handling.h> // mus noch zu <simple...> geändert werden
+#include <simple_message_client_commandline_handling.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,6 +35,10 @@ int main(const int argc, const char * const *argv) {
     int verbose = 0;
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
+
+    if (verbose == 1) { // -h
+        usage(stdout, argv[0], 0);
+    }
 
     struct addrinfo hints;
     struct addrinfo *result = NULL;

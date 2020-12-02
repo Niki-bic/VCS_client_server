@@ -120,7 +120,7 @@ int main(const int argc, const char * const*argv) {
         exit(EXIT_FAILURE);
     }
 
-    if ((file_read = fdopen(socket_read, "rb")) == NULL) {
+    if ((file_read = fdopen(socket_read, "r")) == NULL) {
         // error in fdopen
         exit(EXIT_FAILURE);
     }
@@ -153,7 +153,6 @@ int main(const int argc, const char * const*argv) {
     }
 
     int status = handle_reply(reply);
-    printf("%s", reply);
 
     if (fclose(file_read) == -1) {
         // error        
@@ -190,8 +189,8 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 
 
 int handle_reply(char *reply) {
-    fprintf(stderr, "%s\n", reply);
-    fprintf(stderr, "\n\n");
+    // fprintf(stderr, "%s\n", reply);
+    // fprintf(stderr, "\n\n");
     int status = 0;
     int len = 0;
     char *pointer = reply;
@@ -211,19 +210,23 @@ int handle_reply(char *reply) {
 
 
 
-    while (pointer != NULL) {
+    while (TRUE) {
         if ((pointer = strstr(pointer, "file=")) == NULL) {
             // error: no file=
+            break; // das ist wichtig!
         }
         pointer += 5; // strlen("file=") == 5
         int i = 0;
         memset(filename, 0, BUF_LEN);
         while(*pointer != '\n') {
+            // fprintf(stderr, "%c ", *pointer);
             filename[i] = *pointer;
             i++;
             pointer++;
         }
 
+        // fprintf(stderr, "%s\n", filename);
+        // fprintf(stderr, "strlen %lu\n", strlen(filename));
 
         /* if ((pointer = strstr(pointer, "len=")) == NULL) {
             // error: no len=
@@ -242,15 +245,18 @@ int handle_reply(char *reply) {
             // error in fopen
         }
       
+        // fprintf(stderr, "\n\n%s\n\n\n", pointer);
         if (fwrite(pointer, sizeof(char), len, file) < len) {
             // error in fwrite
         }
 
         if (fclose(file) == -1) {
             // error in fclose
+            // fprintf(stderr, "\nError\n\n");
+
         }
 
-        fprintf(stderr, "status=%d, file=%s, len=%d\n", status, filename, len);
+        // fprintf(stderr, "\nstatus=%d, file=%s, len=%d\n\n", status, filename, len);
 
     } // end while
 

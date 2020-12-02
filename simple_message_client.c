@@ -74,8 +74,6 @@ int main(const int argc, const char * const*argv) {
         strcat(request, "\n"); // unbedingt notwendig
     }
 
-    // printf("%d", request_len);
-    // fprintf(stderr, "%s", request);
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC; // egal ob IP4 oder IP6
@@ -189,8 +187,6 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 
 
 int handle_reply(char *reply) {
-    // fprintf(stderr, "%s\n", reply);
-    // fprintf(stderr, "\n\n");
     int status = 0;
     int len = 0;
     char *pointer = reply;
@@ -205,7 +201,7 @@ int handle_reply(char *reply) {
     if ((pointer = strstr(reply, "status=")) == NULL) {
         // error: status= not found
     }
-    pointer += 7;
+    pointer += 7;                       // strlen("status=") == 7
     status = strtol(pointer, NULL, 10); // erro-checking noch einbauen
 
 
@@ -219,45 +215,33 @@ int handle_reply(char *reply) {
         int i = 0;
         memset(filename, 0, BUF_LEN);
         while(*pointer != '\n') {
-            // fprintf(stderr, "%c ", *pointer);
             filename[i] = *pointer;
             i++;
             pointer++;
         }
+        pointer++;                       // newline-Zeichen schlucken
 
-        // fprintf(stderr, "%s\n", filename);
-        // fprintf(stderr, "strlen %lu\n", strlen(filename));
 
-        /* if ((pointer = strstr(pointer, "len=")) == NULL) {
-            // error: no len=
-        } */
-        pointer++;       // newline-Zeichen schlucken
-        pointer += 4;    // strlen("len=") == 4
+        pointer += 4;                    // strlen("len=") == 4
         len = strtol(pointer, NULL, 10); // error-checking noch einbauen
 
-
-        while (*pointer != '\n') { // Längenangabe überspringen
+        while (*pointer != '\n') {       // Längenangabe überspringen
             pointer++;
         }
-        pointer++; // newline-Zeichen schlucken
+        pointer++;                       // newline-Zeichen schlucken
+
 
         if ((file = fopen(filename, "w")) == NULL) {
             // error in fopen
         }
       
-        // fprintf(stderr, "\n\n%s\n\n\n", pointer);
         if (fwrite(pointer, sizeof(char), len, file) < len) {
             // error in fwrite
         }
 
         if (fclose(file) == -1) {
             // error in fclose
-            // fprintf(stderr, "\nError\n\n");
-
         }
-
-        // fprintf(stderr, "\nstatus=%d, file=%s, len=%d\n\n", status, filename, len);
-
     } // end while
 
 

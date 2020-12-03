@@ -1,7 +1,14 @@
+
 // was erwartet sich die simple_message_server_logic als Argumente?
+/* 
+Verständnisfrage an die Lektoren:
+Wenn sms_logic von stdin liest und angenommen es kommen in kurzer Zeit hintereinander 
+2 Requests von Clients rein, wie kann man sicherstellen, dass der 2. Request nicht den
+ersten überschreibt?
+*/
+
 #include <errno.h>
 #include <netdb.h>
-#include "simple_message_client_commandline_handling.h" // mus noch zu <simple...> geändert werden
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,48 +19,64 @@
 #define BACKLOG 5          // wie groß tatsächlich?
 #define MAXMESSAGELEN 1024 // ebenso fraglich wie groß
 
+#define TRUE 1
+#define FALSE 0
+
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
+void sig_child(int signr);
 
 
 int main(const int argc, const char * const *argv) {
-    const char *server = NULL;
-    const char *port = NULL;
-    const char *user = NULL;
-    const char *message = NULL;
-    const char *img_url = NULL;
-    int verbose = 0;
 
-    smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
+    int c = -1;
+    char *port  = NULL;
+    int verbose = FALSE;
 
-    if (verbose != 0) {           // -h
-        usage(stdout, argv[0], 0);
+    while ((c = getopt(argc, (char * const *) argv, "p:h")) != -1) {
+        switch (c) {
+            case 'p':
+                port = optarg;
+                break;
+            case 'h':
+                verbose = TRUE;
+                break;
+            case '?':
+            default:
+                usage(stderr, argv[0], EXIT_FAILURE);
+        }
+    }
+
+    if (verbose == TRUE) {                  // -h
+        usage(stdout, argv[0], EXIT_SUCCESS);
     }
 
     char request[MAXMESSAGELEN] = {'\0'};
+    char reply[MAXMESSAGELEN]   = {'\0'};
 
     struct addrinfo hints;
-    struct addrinfo *result = NULL;
+    struct addrinfo *result  = NULL;
     struct addrinfo *res_ptr = NULL;
 
-    int socket_listen = -1;
+    int socket_listen  = -1;
     int socket_connect = -1;
 
     FILE *file_write = NULL;
-    FILE *file_read = NULL;
+    FILE *file_read  = NULL;
 
     int pid = -1;
 
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;                 // Server muss nur IP4 können
-    hints.ai_socktype = SOCK_STREAM;           // TCP
-    hints.ai_flags = AI_PASSIVE;               // IP automatisch ausfüllen
+    hints.ai_family   = AF_INET;                 // Server muss nur IP4 können
+    hints.ai_socktype = SOCK_STREAM;             // TCP
+    hints.ai_flags    = AI_PASSIVE;              // IP automatisch ausfüllen
 
     if (getaddrinfo(NULL, port, &hints, &result) != 0) {
         // error
         exit(EXIT_FAILURE);
     }
+
 
     for (res_ptr = result; res_ptr != NULL; res_ptr = res_ptr->ai_next) {
         socket_listen = socket(res_ptr->ai_family, res_ptr->ai_socktype, res_ptr->ai_protocol);
@@ -62,7 +85,16 @@ int main(const int argc, const char * const *argv) {
             continue;
         }
 
-        if (bind(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen) != -1) {
+        if (bind(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen) == -1) {
+            if (close(socket_listen) == -1) {
+                // error
+                exit(EXIT_FAILURE);
+            }            
+
+            continue;
+        }
+
+        if (listen(socket_listen, BACKLOG) != -1) {
             break;
         }
 
@@ -72,6 +104,7 @@ int main(const int argc, const char * const *argv) {
         }
     }
 
+
     freeaddrinfo(result);
 
     if (res_ptr == NULL) {
@@ -79,25 +112,26 @@ int main(const int argc, const char * const *argv) {
         exit(EXIT_FAILURE);
     }
 
-    if (listen(socket_listen, BACKLOG) == -1) { // möglicherweise in die for-Schleife
-        // error
-    }
-
 
     while (TRUE) {
-        if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen)) == -1) {
-            // error
+        errno = 0;
+        if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, &res_ptr->ai_addrlen)) == -1) {
+            if (errno == EINTR) {
+                continue;
+            } else {
+                // error
+            }
+
             continue;
         }
 
         memset(request, 0, sizeof(request));
 
-        // einlesen des request
+        // einlesen des request, vl gleich direkt auf stdin schreiben?
         int i = 0;
-        while (read(socket_connect, &request[i * 100], sizeof(request[0]), 100) != 0 && i < MAXMESSAGELEN) {
+        while (read(socket_connect, &request[i * 100], 100) != 0 && i < MAXMESSAGELEN) {
             i++;
         }
-
 
 	    switch (pid = fork()) {  
             case -1:                                           // fehler bei fork()                                    
@@ -134,13 +168,13 @@ int main(const int argc, const char * const *argv) {
 
 
                 // request auf stdin schreiben, denn sms_logic liest von stdin
-
-                if (write(stdin, request, sizeof(request)) == -1) {
+                if (write(STDIN_FILENO, request, sizeof(request)) == -1) {
                     // error
                 }
 
-                execlp("simple_message_server_logic", (char *) NULL);
+                execlp("simple_message_server_logic", argv[0], (char *) NULL); // argument fehlt
                 // error, hier nur wenn execlp versagt
+                _exit(EXIT_FAILURE);
 
                 break;
             default:                                           // parent                               
@@ -148,19 +182,14 @@ int main(const int argc, const char * const *argv) {
                     // error
                 }
 
-                // waitpid eventuell hier?
+                // waitpid eventuell hier?, waitpid mit WNOHANG
 
                 break;
         }
 
-
-
     } // end while
 
-
-
-
-    return 0;
+    // return 0;                // da sollte das Programm nie hinkommen
 } // end main()
 
 
@@ -170,3 +199,9 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
     -h, --help\n", cmnd);
     exit(exitcode);
 } // end usage()
+
+
+void sig_child(int signr) {
+
+
+} // end sig_child

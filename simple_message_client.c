@@ -22,7 +22,6 @@
 #include <unistd.h>
 #include <errno.h>
 
-int errnum;
 
 #define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
 
@@ -79,9 +78,9 @@ int main(const int argc, const char * const *argv) {
         }
     
     	errno = 0;
+		
         if (close(socket_write) == -1) {
-            errnum = errno;
-            fprintf(stderr,"Error closing write socket: %s",strerror( errnum ));
+            fprintf(stderr,"Error closing write socket: %s",strerror( errno ));
             exit(EXIT_FAILURE);
         }
     }
@@ -97,16 +96,15 @@ int main(const int argc, const char * const *argv) {
     errno = 0;
 
     if ((socket_read = dup(socket_write)) == -1) {
-        errnum = errno;
-        fprintf(stderr,"Error duplicating file discriptor: %s",strerror( errnum ));
+        fprintf(stderr,"Error duplicating file discriptor: %s",strerror( errno ));
         exit(EXIT_FAILURE);
     }
 
     errno = 0;
 
     if ((file_write = fdopen(socket_write, "w")) == NULL) {
-	errnum = errno;
-        fprintf(stderr,"Error opening write socket: %s",strerror( errnum ));
+
+        fprintf(stderr,"Error opening write socket: %s",strerror( errno ));
         // error in fdopen
         exit(EXIT_FAILURE);
     }
@@ -114,8 +112,8 @@ int main(const int argc, const char * const *argv) {
     errno = 0;
 
     if ((file_read = fdopen(socket_read, "r")) == NULL) {
-	errnum = errno;
-        fprintf(stderr,"Error opening read socket: %s",strerror( errnum ));
+
+        fprintf(stderr,"Error opening read socket: %s",strerror( errno ));
         // error in fdopen
         exit(EXIT_FAILURE);
     }
@@ -129,15 +127,13 @@ int main(const int argc, const char * const *argv) {
     if (img_url == NULL) {
 	errno = 0;
         if (fprintf(file_write, "user=%s\n%s\n", user, message) < 0) {
-	    errnum = errno;
-            fprintf(stderr,"Error writing in stream: %s",strerror( errnum )); // error fprintf
+            fprintf(stderr,"Error writing in stream: %s",strerror( errno )); // error fprintf
             exit(EXIT_FAILURE);
         }
     } else { // img_url != NULL
 	errno = 0;
         if (fprintf(file_write, "user=%s\nimg=%s\n%s\n", user, img_url, message) < 0) {
-	    errnum = errno;
-            fprintf(stderr,"Error writing in stream: %s",strerror( errnum ));
+            fprintf(stderr,"Error writing in stream: %s",strerror( errno ));
             // error fprintf
             exit(EXIT_FAILURE);
         }
@@ -146,24 +142,21 @@ int main(const int argc, const char * const *argv) {
     errno = 0;
 
     if (fflush(file_write) != 0) { // 
-	errnum = errno;
-        fprintf(stderr,"Error flushing write stream: %s",strerror( errnum ));// error
+        fprintf(stderr,"Error flushing write stream: %s",strerror( errno ));// error
         exit(EXIT_FAILURE);
     }
 
     errno = 0;
 
     if (shutdown(fileno(file_write), SHUT_WR) == -1) { // sendet offenbar EOF
-	errnum = errno;
-        fprintf(stderr,"Error shutdown write socket failed: %s",strerror( errnum ));
+        fprintf(stderr,"Error shutdown write socket failed: %s",strerror( errno ));
         exit(EXIT_FAILURE);
     }
     
     errno = 0;
 
     if (fclose(file_write) == -1) {
-	errnum = errno;
-        fprintf(stderr,"Error closing write socket failed: %s",strerror( errnum ));
+        fprintf(stderr,"Error closing write socket failed: %s",strerror( errno ));
     }
 
     // einlesen des reply
@@ -177,8 +170,7 @@ int main(const int argc, const char * const *argv) {
     errno = 0;
 
     if (fclose(file_read) == -1) {
-	errnum = errno;
-        fprintf(stderr,"Error closing read socket failed: %s",strerror( errnum ));
+        fprintf(stderr,"Error closing read socket failed: %s",strerror( errno ));
     }
 
     // close nicht notwendig, da fclose() auch den
@@ -238,7 +230,6 @@ long handle_reply(char *reply) {
 
     while (TRUE) {
         if ((pointer = strstr(pointer, "file=")) == NULL) {
-	    fprintf(stderr,"Error 'file=' not found");
             // error: no file=
             break; // das ist wichtig!
         }
@@ -254,16 +245,16 @@ long handle_reply(char *reply) {
 
 
         pointer += 4;                    // strlen("len=") == 4
-	errno = 0;
+		errno = 0;
         len = strtol(pointer, NULL, 10); // error-checking noch einbauen
 	
-	if (pointer == NULL){
+		if (pointer == NULL){
             fprintf (stderr, " number : %lu  invalid  (no digits found, 0 returned)\n", len);
-	}else if (errno == ERANGE && len == 0){
+		}else if (errno == ERANGE && len == 0){
             fprintf (stderr, " number : %lu  invalid  (underflow occurred)\n", len);
-	}else if (errno == ERANGE && len == ULONG_MAX){
+		}else if (errno == ERANGE && len == ULONG_MAX){
             fprintf (stderr, " number : %lu  invalid  (overflow occurred)\n", len);
-	}else if (errno == EINVAL){
+		}else if (errno == EINVAL){
             fprintf (stderr, " number : %lu  invalid  (base contains unsupported value)\n", len);
     	}else if (errno != 0 && len == 0){
             fprintf (stderr, " number : %lu  invalid  (unspecified error occurred)\n", len);
@@ -274,25 +265,21 @@ long handle_reply(char *reply) {
         }
         pointer++;                       // newline-Zeichen schlucken
 
-	errno = 0;
+		errno = 0;
 	
         if ((file = fopen(filename, "w")) == NULL) {
-	    errnum = errno;
-            fprintf(stderr,"Error opening file %s: %s",filename ,strerror( errnum ));
+            fprintf(stderr,"Error opening file %s: %s",filename ,strerror( errno ));
         }
         
         errno = 0;
-
         if (fwrite(pointer, sizeof(char), len, file) < len) {
-            errnum = errno;
-            fprintf(stderr,"Error writing in file %s: %s",filename ,strerror( errnum )); // error in fwrite
+            fprintf(stderr,"Error writing in file %s: %s",filename ,strerror( errno )); // error in fwrite
         }
 	
 	errno = 0;
 
         if (fclose(file) == -1) {
-            errnum = errno;
-            fprintf(stderr,"Error closing file %s: %s",filename ,strerror( errnum ));
+            fprintf(stderr,"Error closing file %s: %s",filename ,strerror( errno ));
         }
     } // end while
 

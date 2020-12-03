@@ -5,7 +5,7 @@
 // ausprobieren ob -i (bzw -image) funktioniert  -- DONE
 // testcases checken
 // eventuell modularer aufbauen, auslagern was auch der server braucht
-// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhautp geschossen werden
+// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhaupt geschlossen werden
 // -h einbauen -- DONE
 
 
@@ -19,7 +19,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BUF_LEN 100000 // noch überlegen wie lang notwendig
+#define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
@@ -36,7 +36,7 @@ int main(const int argc, const char * const *argv) {
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
 
-    if (verbose == 1) { // -h
+    if (verbose != 0) {           // -h
         usage(stdout, argv[0], 0);
     }
 
@@ -50,49 +50,12 @@ int main(const int argc, const char * const *argv) {
     FILE *file_write = NULL;
     FILE *file_read = NULL;
 
-    int request_len = 0;
-    char *request = NULL;
     char reply[BUF_LEN] = {'\0'};
-
-    request_len = strlen("user=") + strlen(user) + 1 + strlen(message) + 2;
-
-    // eventuell in eine Funktion auslagern und error-checking, sowie strncpy stats strcpy sowie strncat statt strcat
-    if (img_url == NULL) {
-        request = (char *) calloc(request_len, sizeof(char));
-
-        if (request == NULL) {
-            // error
-            exit(EXIT_FAILURE);
-        }
-
-        strcpy(request, "user=");
-        strcat(request, user);
-        strcat(request, "\n");
-        strcat(request, message);
-        strcat(request, "\n"); // unbedingt notwendig
-    } else { // img_url != NULL
-        request_len += strlen("img=") + strlen(img_url) + 1;
-        request = (char *) calloc(request_len, sizeof(char));
-
-        if (request == NULL) {
-            // error
-            exit(EXIT_FAILURE);
-        }
-
-        strcpy(request, "user=");
-        strcat(request, user);
-        strcat(request, "\n");
-        strcat(request, "img=");
-        strcat(request, img_url);
-        strcat(request, "\n");
-        strcat(request, message);
-        strcat(request, "\n"); // unbedingt notwendig
-    }
 
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC; // egal ob IP4 oder IP6
-    hints.ai_socktype = SOCK_STREAM; // TCP
+    hints.ai_family = AF_UNSPEC;               // egal ob IP4 oder IP6
+    hints.ai_socktype = SOCK_STREAM;           // TCP
 
     if (getaddrinfo(server, port, &hints, &result) != 0) {
         // error
@@ -142,9 +105,18 @@ int main(const int argc, const char * const *argv) {
     // setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
     // setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
 
-    if (fprintf(file_write, "%s", request) < 0) {
-        // error fprintf
-        exit(EXIT_FAILURE);
+
+    // sending request
+    if (img_url == NULL) {
+        if (fprintf(file_write, "user=%s\n%s\n", user, message) < 0) {
+            // error fprintf
+            exit(EXIT_FAILURE);
+        }
+    } else { // img_url != NULL
+        if (fprintf(file_write, "user=%s\nimg=%s\n%s\n", user, img_url, message) < 0) {
+            // error fprintf
+            exit(EXIT_FAILURE);
+        }
     }
 
     if (fflush(file_write) != 0) { // 
@@ -152,7 +124,6 @@ int main(const int argc, const char * const *argv) {
         exit(EXIT_FAILURE);
     }
 
-    free(request);
 
     if (shutdown(fileno(file_write), SHUT_WR) == -1) { // sendet offenbar EOF
         // error
@@ -161,7 +132,7 @@ int main(const int argc, const char * const *argv) {
 
     // einlesen des reply
     int i = 0;
-    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0) {
+    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0 && i < BUF_LEN) {
         i++;
     }
 
@@ -175,14 +146,8 @@ int main(const int argc, const char * const *argv) {
         // error
     }
 
-    // close() zweimal?
-    if (close(socket_read) == -1) {
-        // error
-    }
-
-    if (close(socket_write) == -1) {
-        // error
-    }
+    // close wahrscheinlich nicht notwendig, da angeblich fclose auch den
+    // darunter liegenden Deskriptor schließt
 
     return status;
 } // end main()
@@ -201,6 +166,7 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 } // end usage()
 
 
+// eventuell split_input aus simple_message_server_logic abkupfern
 long handle_reply(char *reply) {
     long status = 0;
     unsigned long len = 0;

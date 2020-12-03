@@ -21,7 +21,7 @@ ersten überschreibt?
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BACKLOG 5          // wie groß tatsächlich?
+#define BACKLOG 5          // wie groß tatsächlich?gdgddggd
 
 #define TRUE 1
 #define FALSE 0

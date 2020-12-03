@@ -1,5 +1,10 @@
 
 // was erwartet sich die simple_message_server_logic als Argumente?
+// d.h. wie wird execp() richtig aufgerufen
+// wann und wie schreibe ich den Request auf stdin (oder doch auf stdout)?
+// wo und wann kann ich von stdout den Reply der sms_logic einlesen und dem Client 
+// weiterreichen?
+
 /* 
 Verständnisfrage an die Lektoren:
 Wenn sms_logic von stdin liest und angenommen es kommen in kurzer Zeit hintereinander 
@@ -31,7 +36,6 @@ int main(const int argc, const char * const *argv) {
 
     int c = -1;
     char *port  = NULL;
-    int verbose = FALSE;
 
     while ((c = getopt(argc, (char * const *) argv, "p:h")) != -1) {
         switch (c) {
@@ -40,15 +44,12 @@ int main(const int argc, const char * const *argv) {
                 break;
             case 'h':
                 verbose = TRUE;
+                usage(stdout, argv[0], EXIT_SUCCESS);
                 break;
             case '?':
             default:
                 usage(stderr, argv[0], EXIT_FAILURE);
         }
-    }
-
-    if (verbose == TRUE) {                  // -h
-        usage(stdout, argv[0], EXIT_SUCCESS);
     }
 
     char request[MAXMESSAGELEN] = {'\0'};
@@ -103,8 +104,7 @@ int main(const int argc, const char * const *argv) {
             exit(EXIT_FAILURE);
         }
     }
-
-
+    
     freeaddrinfo(result);
 
     if (res_ptr == NULL) {
@@ -125,6 +125,7 @@ int main(const int argc, const char * const *argv) {
             continue;
         }
 
+
         memset(request, 0, sizeof(request));
 
         // einlesen des request, vl gleich direkt auf stdin schreiben?
@@ -135,7 +136,8 @@ int main(const int argc, const char * const *argv) {
 
 	    switch (pid = fork()) {  
             case -1:                                           // fehler bei fork()                                    
-
+                // error
+                exit(EXIT_FAILURE);
 
                 break;
             case 0:                                            // child                                   
@@ -144,17 +146,11 @@ int main(const int argc, const char * const *argv) {
                 }
 
                 // socket duplizieren und auf stdin und stdout umlenken
-                int socket_new = -1;
-
-                if ((socket_new = dup(socket_connect)) == -1) {
-                    // error
-                }
-
                 if (dup2(socket_connect, STDIN_FILENO) == -1) {
                     // error
                 }
 
-                if (dup2(socket_new, STDOUT_FILENO) == -1) {
+                if (dup2(socket_connect, STDOUT_FILENO) == -1) {
                     // error
                 }
 
@@ -162,13 +158,8 @@ int main(const int argc, const char * const *argv) {
                     // error
                 }
 
-                if (close(socket_new) == -1) {
-                    // error
-                }
-
-
                 // request auf stdin schreiben, denn sms_logic liest von stdin
-                if (write(STDIN_FILENO, request, sizeof(request)) == -1) {
+                if (write(STDIN_FILENO, request, strlen(request) + 1) == -1) {
                     // error
                 }
 

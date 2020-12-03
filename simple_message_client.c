@@ -36,12 +36,12 @@ int main(const int argc, const char * const *argv) {
     const char *user    = NULL;
     const char *message = NULL;
     const char *img_url = NULL;
-    int verbose         = 0;
+    int verbose         = FALSE;
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
 
-    if (verbose != 0) {           // -h
-        usage(stdout, argv[0], 0);
+    if (verbose != FALSE) {           // -h
+        usage(stdout, argv[0], EXIT_SUCCESS);
     }
 
     struct addrinfo hints;

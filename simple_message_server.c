@@ -22,7 +22,6 @@ ersten überschreibt?
 #include <unistd.h>
 
 #define BACKLOG 5          // wie groß tatsächlich?
-#define MAXMESSAGELEN 1024 // ebenso fraglich wie groß
 
 #define TRUE 1
 #define FALSE 0
@@ -43,7 +42,6 @@ int main(const int argc, const char * const *argv) {
                 port = optarg;
                 break;
             case 'h':
-                verbose = TRUE;
                 usage(stdout, argv[0], EXIT_SUCCESS);
                 break;
             case '?':
@@ -52,18 +50,12 @@ int main(const int argc, const char * const *argv) {
         }
     }
 
-    char request[MAXMESSAGELEN] = {'\0'};
-    char reply[MAXMESSAGELEN]   = {'\0'};
-
     struct addrinfo hints;
     struct addrinfo *result  = NULL;
     struct addrinfo *res_ptr = NULL;
 
     int socket_listen  = -1;
     int socket_connect = -1;
-
-    FILE *file_write = NULL;
-    FILE *file_read  = NULL;
 
     int pid = -1;
 
@@ -125,15 +117,6 @@ int main(const int argc, const char * const *argv) {
             continue;
         }
 
-
-        memset(request, 0, sizeof(request));
-
-        // einlesen des request, vl gleich direkt auf stdin schreiben?
-        int i = 0;
-        while (read(socket_connect, &request[i * 100], 100) != 0 && i < MAXMESSAGELEN) {
-            i++;
-        }
-
 	    switch (pid = fork()) {  
             case -1:                                           // fehler bei fork()                                    
                 // error
@@ -146,25 +129,19 @@ int main(const int argc, const char * const *argv) {
                 }
 
                 // socket duplizieren und auf stdin und stdout umlenken
-                if (dup2(socket_connect, STDIN_FILENO) == -1) {
-                    // error
-                }
-
                 if (dup2(socket_connect, STDOUT_FILENO) == -1) {
                     // error
                 }
 
+                if (dup2(socket_connect, STDIN_FILENO) == -1) {
+                    // error
+                }
+
+                execlp("simple_message_server_logic", "simple_message_server_logic", (char *) NULL); // argument fehlt
+                // error, hier nur wenn execlp versagt
                 if (close(socket_connect) == -1) {
                     // error
-                }
-
-                // request auf stdin schreiben, denn sms_logic liest von stdin
-                if (write(STDIN_FILENO, request, strlen(request) + 1) == -1) {
-                    // error
-                }
-
-                execlp("simple_message_server_logic", argv[0], (char *) NULL); // argument fehlt
-                // error, hier nur wenn execlp versagt
+                }                
                 _exit(EXIT_FAILURE);
 
                 break;

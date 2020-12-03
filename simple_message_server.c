@@ -1,10 +1,3 @@
-
-// was erwartet sich die simple_message_server_logic als Argumente?
-// d.h. wie wird execp() richtig aufgerufen
-// wann und wie schreibe ich den Request auf stdin (oder doch auf stdout)?
-// wo und wann kann ich von stdout den Reply der sms_logic einlesen und dem Client 
-// weiterreichen?
-
 /* 
 Verständnisfrage an die Lektoren:
 Wenn sms_logic von stdin liest und angenommen es kommen in kurzer Zeit hintereinander 
@@ -14,25 +7,25 @@ ersten überschreibt?
 
 #include <errno.h>
 #include <netdb.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
-#define BACKLOG 5          // wie groß tatsächlich?gdgddggd
-
+#define BACKLOG 5          // wie groß tatsächlich?
 #define TRUE 1
 #define FALSE 0
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
-void sig_child(int signr);
+void sigchild_handler(int s);
 
 
 int main(const int argc, const char * const *argv) {
-
     int c = -1;
     char *port  = NULL;
 
@@ -41,9 +34,11 @@ int main(const int argc, const char * const *argv) {
             case 'p':
                 port = optarg;
                 break;
+
             case 'h':
                 usage(stdout, argv[0], EXIT_SUCCESS);
                 break;
+
             case '?':
             default:
                 usage(stderr, argv[0], EXIT_FAILURE);
@@ -54,6 +49,8 @@ int main(const int argc, const char * const *argv) {
     struct addrinfo *result  = NULL;
     struct addrinfo *res_ptr = NULL;
 
+    struct sigaction sa;
+
     int socket_listen  = -1;
     int socket_connect = -1;
 
@@ -61,7 +58,7 @@ int main(const int argc, const char * const *argv) {
 
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family   = AF_INET;                 // Server muss nur IP4 können
+    hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;             // TCP
     hints.ai_flags    = AI_PASSIVE;              // IP automatisch ausfüllen
 
@@ -105,6 +102,19 @@ int main(const int argc, const char * const *argv) {
     }
 
 
+    sa.sa_handler = sigchild_handler;      // reap all dead processes
+    if (sigemptyset(&sa.sa_mask) == -1) {
+        // error
+    }
+    
+    sa.sa_flags = SA_RESTART;
+
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) {
+        perror("sigaction");
+        exit(EXIT_FAILURE);
+    }
+
+
     while (TRUE) {
         errno = 0;
         if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, &res_ptr->ai_addrlen)) == -1) {
@@ -121,8 +131,8 @@ int main(const int argc, const char * const *argv) {
             case -1:                                           // fehler bei fork()                                    
                 // error
                 exit(EXIT_FAILURE);
-
                 break;
+
             case 0:                                            // child                                   
                 if (close(socket_listen) == -1) {
                     // error
@@ -137,27 +147,26 @@ int main(const int argc, const char * const *argv) {
                     // error
                 }
 
-                execlp("simple_message_server_logic", "simple_message_server_logic", (char *) NULL); // argument fehlt
-                // error, hier nur wenn execlp versagt
                 if (close(socket_connect) == -1) {
                     // error
                 }                
-                _exit(EXIT_FAILURE);
 
+                execlp("simple_message_server_logic", "simple_message_server_logic", (char *) NULL);
+                // error, hier nur wenn execlp versagt
+
+                _exit(EXIT_FAILURE);
                 break;
+
             default:                                           // parent                               
                 if (close(socket_connect) == -1) {
                     // error
                 }
-
-                // waitpid eventuell hier?, waitpid mit WNOHANG
 
                 break;
         }
 
     } // end while
 
-    // return 0;                // da sollte das Programm nie hinkommen
 } // end main()
 
 
@@ -169,7 +178,13 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 } // end usage()
 
 
-void sig_child(int signr) {
+void sigchild_handler(int s) {
+    // waitpid() might overwrite errno, so we save and restore it:
+    int saved_errno = errno;
 
+    while ((s = waitpid(-1, NULL, WNOHANG)) > 0) {
+        ;
+    }
 
+    errno = saved_errno;
 } // end sig_child

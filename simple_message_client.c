@@ -14,11 +14,15 @@
 #include <netdb.h>
 #include <simple_message_client_commandline_handling.h>
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <errno.h>
+
+int errnum;
 
 #define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
 
@@ -53,16 +57,16 @@ int main(const int argc, const char * const *argv) {
 
     char reply[BUF_LEN] = {'\0'};
 
-
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family   = AF_UNSPEC;             // egal ob IP4 oder IP6
     hints.ai_socktype = SOCK_STREAM;           // TCP
 
-    if (getaddrinfo(server, port, &hints, &result) != 0) {
-        // error
-        exit(EXIT_FAILURE);
-    }
-
+    int s = getaddrinfo(server, port, &hints, &result);
+	if(s != 0){
+           fprintf(stderr,"getaddrinfo: %s\n", gai_strerror(s));
+           exit(EXIT_FAILURE);
+	}
+    
     for (res_ptr = result; res_ptr != NULL; res_ptr = res_ptr->ai_next) {
         socket_write = socket(res_ptr->ai_family, res_ptr->ai_socktype, res_ptr->ai_protocol);
 
@@ -73,31 +77,45 @@ int main(const int argc, const char * const *argv) {
         if (connect(socket_write, res_ptr->ai_addr, res_ptr->ai_addrlen) != -1) {
             break;
         }
-
+    
+    	errno = 0;
         if (close(socket_write) == -1) {
-            // error
+            errnum = errno;
+            fprintf(stderr,"Error closing write socket: %s",strerror( errnum ));
             exit(EXIT_FAILURE);
         }
     }
 
     freeaddrinfo(result);
-
+ 
     if (res_ptr == NULL) {
+        fprintf(stderr,"Error: Client failed to connect");
         // error: client failed to connect
         exit(EXIT_FAILURE);
     }
+    
+    errno = 0;
 
     if ((socket_read = dup(socket_write)) == -1) {
-        // error in dup()
+        errnum = errno;
+        fprintf(stderr,"Error duplicating file discriptor: %s",strerror( errnum ));
         exit(EXIT_FAILURE);
     }
 
+    errno = 0;
+
     if ((file_write = fdopen(socket_write, "w")) == NULL) {
+	errnum = errno;
+        fprintf(stderr,"Error opening write socket: %s",strerror( errnum ));
         // error in fdopen
         exit(EXIT_FAILURE);
     }
 
+    errno = 0;
+
     if ((file_read = fdopen(socket_read, "r")) == NULL) {
+	errnum = errno;
+        fprintf(stderr,"Error opening read socket: %s",strerror( errnum ));
         // error in fdopen
         exit(EXIT_FAILURE);
     }
@@ -109,29 +127,43 @@ int main(const int argc, const char * const *argv) {
 
     // sending request
     if (img_url == NULL) {
+	errno = 0;
         if (fprintf(file_write, "user=%s\n%s\n", user, message) < 0) {
-            // error fprintf
+	    errnum = errno;
+            fprintf(stderr,"Error writing in stream: %s",strerror( errnum )); // error fprintf
             exit(EXIT_FAILURE);
         }
     } else { // img_url != NULL
+	errno = 0;
         if (fprintf(file_write, "user=%s\nimg=%s\n%s\n", user, img_url, message) < 0) {
+	    errnum = errno;
+            fprintf(stderr,"Error writing in stream: %s",strerror( errnum ));
             // error fprintf
             exit(EXIT_FAILURE);
         }
     }
 
+    errno = 0;
+
     if (fflush(file_write) != 0) { // 
-        // error
+	errnum = errno;
+        fprintf(stderr,"Error flushing write stream: %s",strerror( errnum ));// error
         exit(EXIT_FAILURE);
     }
 
+    errno = 0;
+
     if (shutdown(fileno(file_write), SHUT_WR) == -1) { // sendet offenbar EOF
-        // error
+	errnum = errno;
+        fprintf(stderr,"Error shutdown write socket failed: %s",strerror( errnum ));
         exit(EXIT_FAILURE);
     }
     
+    errno = 0;
+
     if (fclose(file_write) == -1) {
-        // error
+	errnum = errno;
+        fprintf(stderr,"Error closing write socket failed: %s",strerror( errnum ));
     }
 
     // einlesen des reply
@@ -141,9 +173,12 @@ int main(const int argc, const char * const *argv) {
     }
 
     long status = handle_reply(reply);
+    
+    errno = 0;
 
     if (fclose(file_read) == -1) {
-        // error        
+	errnum = errno;
+        fprintf(stderr,"Error closing read socket failed: %s",strerror( errnum ));
     }
 
     // close nicht notwendig, da fclose() auch den
@@ -181,15 +216,29 @@ long handle_reply(char *reply) {
 
 
     if ((pointer = strstr(reply, "status=")) == NULL) {
+	fprintf(stderr,"Error 'status =' not found");
         // error: status= not found
     }
     pointer += 7;                       // strlen("status=") == 7
+    errno = 0;
     status = strtol(pointer, NULL, 10); // erro-checking noch einbauen
-
+    
+    if (pointer == NULL){
+        fprintf (stderr, " number : %lu  invalid  (no digits found, 0 returned)\n", status);
+    }else if (errno == ERANGE && status == LONG_MIN){
+        fprintf (stderr, " number : %lu  invalid  (underflow occurred)\n", status);
+    }else if (errno == ERANGE && status == LONG_MAX){
+        fprintf (stderr, " number : %lu  invalid  (overflow occurred)\n", status);
+    }else if (errno == EINVAL){
+        fprintf (stderr, " number : %lu  invalid  (base contains unsupported value)\n", status);
+    }else if (errno != 0 && status == 0){
+        fprintf (stderr, " number : %lu  invalid  (unspecified error occurred)\n", status);
+    }
 
 
     while (TRUE) {
         if ((pointer = strstr(pointer, "file=")) == NULL) {
+	    fprintf(stderr,"Error 'file=' not found");
             // error: no file=
             break; // das ist wichtig!
         }
@@ -205,28 +254,50 @@ long handle_reply(char *reply) {
 
 
         pointer += 4;                    // strlen("len=") == 4
+	errno = 0;
         len = strtol(pointer, NULL, 10); // error-checking noch einbauen
-
+	
+	if (pointer == NULL){
+            fprintf (stderr, " number : %lu  invalid  (no digits found, 0 returned)\n", len);
+	}else if (errno == ERANGE && len == 0){
+            fprintf (stderr, " number : %lu  invalid  (underflow occurred)\n", len);
+	}else if (errno == ERANGE && len == ULONG_MAX){
+            fprintf (stderr, " number : %lu  invalid  (overflow occurred)\n", len);
+	}else if (errno == EINVAL){
+            fprintf (stderr, " number : %lu  invalid  (base contains unsupported value)\n", len);
+    	}else if (errno != 0 && len == 0){
+            fprintf (stderr, " number : %lu  invalid  (unspecified error occurred)\n", len);
+        }
+	
         while (*pointer != '\n') {       // Längenangabe überspringen
             pointer++;
         }
         pointer++;                       // newline-Zeichen schlucken
 
-
+	errno = 0;
+	
         if ((file = fopen(filename, "w")) == NULL) {
-            // error in fopen
+	    errnum = errno;
+            fprintf(stderr,"Error opening file %s: %s",filename ,strerror( errnum ));
         }
-      
+        
+        errno = 0;
+
         if (fwrite(pointer, sizeof(char), len, file) < len) {
-            // error in fwrite
+            errnum = errno;
+            fprintf(stderr,"Error writing in file %s: %s",filename ,strerror( errnum )); // error in fwrite
         }
+	
+	errno = 0;
 
         if (fclose(file) == -1) {
-            // error in fclose
+            errnum = errno;
+            fprintf(stderr,"Error closing file %s: %s",filename ,strerror( errnum ));
         }
     } // end while
 
 
     return status;
 } // end handle_reply()
+
 

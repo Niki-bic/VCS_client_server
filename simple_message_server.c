@@ -9,8 +9,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define BACKLOG 5
-#define REQ_LEN 100000
+#define BACKLOG 5          // wie groß tatsächlich?
+#define MAXMESSAGELEN 1024 // ebenso fraglich wie groß
 
 
 void usage(FILE *stream, const char *cmnd, int exitcode);
@@ -30,6 +30,8 @@ int main(const int argc, const char * const *argv) {
         usage(stdout, argv[0], 0);
     }
 
+    char request[MAXMESSAGELEN] = {'\0'};
+
     struct addrinfo hints;
     struct addrinfo *result = NULL;
     struct addrinfo *res_ptr = NULL;
@@ -41,6 +43,7 @@ int main(const int argc, const char * const *argv) {
     FILE *file_read = NULL;
 
     int pid = -1;
+
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_INET;                 // Server muss nur IP4 können
@@ -80,7 +83,6 @@ int main(const int argc, const char * const *argv) {
         // error
     }
 
-    // request einlesen und aufbereiten noch machen
 
     while (TRUE) {
         if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen)) == -1) {
@@ -88,21 +90,60 @@ int main(const int argc, const char * const *argv) {
             continue;
         }
 
+        memset(request, 0, sizeof(request));
+
+        // einlesen des request
+        int i = 0;
+        while (read(socket_connect, &request[i * 100], sizeof(request[0]), 100) != 0 && i < MAXMESSAGELEN) {
+            i++;
+        }
+
+
 	    switch (pid = fork()) {  
-            case -1:               // fehler bei fork()                                    
+            case -1:                                           // fehler bei fork()                                    
 
 
                 break;
-            case 0:                // child                                   
+            case 0:                                            // child                                   
                 if (close(socket_listen) == -1) {
                     // error
                 }
+
                 // socket duplizieren und auf stdin und stdout umlenken
-                // request des client auf stdout schreiben (oder doch auf stdin schreiben?, wenn doch von dort vom sms_logic gelesen wird)
-                execlp("simple_message_server_logcic", (char *) NULL);
+                int socket_new = -1;
+
+                if ((socket_new = dup(socket_connect)) == -1) {
+                    // error
+                }
+
+                if (dup2(socket_connect, STDIN_FILENO) == -1) {
+                    // error
+                }
+
+                if (dup2(socket_new, STDOUT_FILENO) == -1) {
+                    // error
+                }
+
+                if (close(socket_connect) == -1) {
+                    // error
+                }
+
+                if (close(socket_new) == -1) {
+                    // error
+                }
+
+
+                // request auf stdin schreiben, denn sms_logic liest von stdin
+
+                if (write(stdin, request, sizeof(request)) == -1) {
+                    // error
+                }
+
+                execlp("simple_message_server_logic", (char *) NULL);
                 // error, hier nur wenn execlp versagt
+
                 break;
-            default:               // parent                               
+            default:                                           // parent                               
                 if (close(socket_connect) == -1) {
                     // error
                 }

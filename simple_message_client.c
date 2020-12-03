@@ -51,6 +51,8 @@ int main(const int argc, const char * const *argv) {
     int socket_write = -1;
     int socket_read  = -1;
 
+    int status = -1;
+
     FILE *file_write = NULL;
     FILE *file_read  = NULL;
 
@@ -165,7 +167,7 @@ int main(const int argc, const char * const *argv) {
         i++;
     }
 
-    long status = handle_reply(reply);
+    status = (int) handle_reply(reply);
     
     errno = 0;
 
@@ -217,13 +219,13 @@ long handle_reply(char *reply) {
     
     if (pointer == NULL){
         fprintf (stderr, " number : %lu  invalid  (no digits found, 0 returned)\n", status);
-    }else if (errno == ERANGE && status == LONG_MIN){
+    } else if (errno == ERANGE && status == LONG_MIN) {
         fprintf (stderr, " number : %lu  invalid  (underflow occurred)\n", status);
-    }else if (errno == ERANGE && status == LONG_MAX){
+    } else if (errno == ERANGE && status == LONG_MAX) {
         fprintf (stderr, " number : %lu  invalid  (overflow occurred)\n", status);
-    }else if (errno == EINVAL){
+    } else if (errno == EINVAL) {
         fprintf (stderr, " number : %lu  invalid  (base contains unsupported value)\n", status);
-    }else if (errno != 0 && status == 0){
+    } else if (errno != 0 && status == 0) {
         fprintf (stderr, " number : %lu  invalid  (unspecified error occurred)\n", status);
     }
 
@@ -236,7 +238,7 @@ long handle_reply(char *reply) {
         pointer += 5; // strlen("file=") == 5
         int i = 0;
         memset(filename, 0, BUF_LEN);
-        while(*pointer != '\n') {
+        while (*pointer != '\n') {
             filename[i] = *pointer;
             i++;
             pointer++;
@@ -248,15 +250,15 @@ long handle_reply(char *reply) {
 		errno = 0;
         len = strtol(pointer, NULL, 10); // error-checking noch einbauen
 	
-		if (pointer == NULL){
+		if (pointer == NULL) {
             fprintf (stderr, " number : %lu  invalid  (no digits found, 0 returned)\n", len);
-		}else if (errno == ERANGE && len == 0){
+		} else if (errno == ERANGE && len == 0) {
             fprintf (stderr, " number : %lu  invalid  (underflow occurred)\n", len);
-		}else if (errno == ERANGE && len == ULONG_MAX){
+		} else if (errno == ERANGE && len == ULONG_MAX) {
             fprintf (stderr, " number : %lu  invalid  (overflow occurred)\n", len);
-		}else if (errno == EINVAL){
+		} else if (errno == EINVAL){
             fprintf (stderr, " number : %lu  invalid  (base contains unsupported value)\n", len);
-    	}else if (errno != 0 && len == 0){
+    	} else if (errno != 0 && len == 0) {
             fprintf (stderr, " number : %lu  invalid  (unspecified error occurred)\n", len);
         }
 	

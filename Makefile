@@ -18,7 +18,7 @@
 CC     =  gcc
 CFLAGS = -Wall -Werror -Wextra -Wstrict-prototypes -Wformat=2 -pedantic \
          -fno-common -ftrapv -O3 -g -c -std=gnu11 
-TFLAGS = -lsimple_message_client_commandline_handling # für server noch -lblabla einfügen
+TFLAGS = -lsimple_message_client_commandline_handling
 RM     =  rm -f
 
 # filenames:
@@ -57,7 +57,7 @@ simple_message_client: simple_message_client.o
 	$(CC) -o $@  $^  $(TFLAGS)
 
 simple_message_server: simple_message_server.o
-	$(CC) -o $@  $^  $(TFLAGS)
+	$(CC) -o $@  $^
 
 %.o: %.c # $(HEADER)
 	$(CC) $(CFLAGS)  $<

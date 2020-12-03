@@ -7,6 +7,7 @@
 // eventuell modularer aufbauen, auslagern was auch der server braucht
 // richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhaupt geschlossen werden
 // -h einbauen -- DONE
+// das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases)
 
 
 #include <errno.h>
@@ -27,12 +28,12 @@ long handle_reply(char *reply);
 
 
 int main(const int argc, const char * const *argv) {
-    const char *server = NULL;
-    const char *port = NULL;
-    const char *user = NULL;
+    const char *server  = NULL;
+    const char *port    = NULL;
+    const char *user    = NULL;
     const char *message = NULL;
     const char *img_url = NULL;
-    int verbose = 0;
+    int verbose         = 0;
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
 
@@ -41,20 +42,20 @@ int main(const int argc, const char * const *argv) {
     }
 
     struct addrinfo hints;
-    struct addrinfo *result = NULL;
+    struct addrinfo *result  = NULL;
     struct addrinfo *res_ptr = NULL;
 
     int socket_write = -1;
-    int socket_read = -1;
+    int socket_read  = -1;
 
     FILE *file_write = NULL;
-    FILE *file_read = NULL;
+    FILE *file_read  = NULL;
 
     char reply[BUF_LEN] = {'\0'};
 
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC;               // egal ob IP4 oder IP6
+    hints.ai_family   = AF_UNSPEC;             // egal ob IP4 oder IP6
     hints.ai_socktype = SOCK_STREAM;           // TCP
 
     if (getaddrinfo(server, port, &hints, &result) != 0) {
@@ -124,10 +125,13 @@ int main(const int argc, const char * const *argv) {
         exit(EXIT_FAILURE);
     }
 
-
     if (shutdown(fileno(file_write), SHUT_WR) == -1) { // sendet offenbar EOF
         // error
         exit(EXIT_FAILURE);
+    }
+    
+    if (fclose(file_write) == -1) {
+        // error
     }
 
     // einlesen des reply
@@ -141,13 +145,9 @@ int main(const int argc, const char * const *argv) {
     if (fclose(file_read) == -1) {
         // error        
     }
-    
-    if (fclose(file_write) == -1) {
-        // error
-    }
 
-    // close wahrscheinlich nicht notwendig, da angeblich fclose auch den
-    // darunter liegenden Deskriptor schließt
+    // close nicht notwendig, da fclose() auch den
+    // darunter liegenden Deskriptor schließt (man-page)
 
     return status;
 } // end main()
@@ -168,11 +168,12 @@ void usage(FILE *stream, const char *cmnd, int exitcode) {
 
 // eventuell split_input aus simple_message_server_logic abkupfern
 long handle_reply(char *reply) {
-    long status = 0;
+    long status       = 0;
     unsigned long len = 0;
-    char *pointer = reply;
+    char *pointer     = reply;
+    FILE *file        = NULL;
     char filename[BUF_LEN] = {'\0'}; // gefällt mir noch nicht ganz
-    FILE *file = NULL;
+
 
     // search for status
     // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen 

@@ -5,16 +5,9 @@ Wenn sms_logic von stdin liest und angenommen es kommen in kurzer Zeit hinterein
 ersten überschreibt?
 */
 
-#include <errno.h>
-#include <netdb.h>
 #include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
+#include "client_server.h"
 
 #define BACKLOG 5 // wie groß tatsächlich?
 #define TRUE 1

@@ -9,16 +9,9 @@
 // -h einbauen -- DONE
 // das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases)
 
-#include <errno.h>
 #include <limits.h>
-#include <netdb.h>
 #include <simple_message_client_commandline_handling.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include "client_server.h"
 
 #define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
 #define REPLY_ERROR -3l
@@ -28,7 +21,7 @@ const char *cmd = NULL; // globaler Speicher für argv[0]
 static long handle_reply(const char *const reply);
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode);
-static long strtol_e(const char *const string);
+static long strtol_e(const char *const string); // Error-checking-Wrapper um strtol()
 static void usage(FILE *stream, const char *cmnd, int exitcode);
 
 int main(const int argc, const char *const *argv)

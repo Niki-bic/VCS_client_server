@@ -10,9 +10,9 @@
 #
 # @version 1.0.0
 #
-# --------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
-# ------------------------------------------------------------- variables --
+# ------------------------------------------------------------- variables -----
 # tools and options:
 
 CC     =  gcc
@@ -26,12 +26,12 @@ RM     =  rm -f
 EXEC   = simple_message_client simple_message_server
 SRC    = simple_message_client.c simple_message_server.c
 OBJ    = $(SRC:.c=.o)
-# HEADER = client_server.h
+HEADER = client_server.h
 DOC    = doc
 DOXY   = doxygen
 DFILE  = Doxyfile
 
-# --------------------------------------------------------------- targets --
+# --------------------------------------------------------------- targets -----
 
 # .PHONY
 
@@ -59,7 +59,7 @@ simple_message_client: simple_message_client.o
 simple_message_server: simple_message_server.o
 	$(CC) -o $@  $^
 
-%.o: %.c # $(HEADER)
+%.o: %.c  $(HEADER)
 	$(CC) $(CFLAGS)  $<
 
-# --------------------------------------------------------------------------
+# -----------------------------------------------------------------------------

@@ -13,7 +13,7 @@
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-#define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
+#define BUF_LEN (1024 * 1024 * 1024 + 2000) // noch überlegen wie lang notwendig
 #define MAX_NAME_LEN 4096
 #define REPLY_ERROR -3l
 
@@ -55,7 +55,7 @@ int main(const int argc, const char *const *argv)
 
     long status = -1;
 
-    char reply[BUF_LEN] = {'\0'};
+    char *reply = NULL;
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // egal ob IP4 oder IP6
@@ -165,6 +165,11 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
+    if ((reply = calloc(BUF_LEN, sizeof(char))) == NULL) {
+        fprintf(stderr, "%s: Error in calloc\n", cmd);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+    }
+
     // einlesen des reply // bis hierher kommt er bei TESTCASE=3
     int i = 0;
     while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0 && i < BUF_LEN / 100)
@@ -173,6 +178,9 @@ int main(const int argc, const char *const *argv)
     }
 
     status = handle_reply(reply);
+
+    free(reply);
+
     if (status == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
@@ -196,7 +204,7 @@ static long handle_reply(const char *const reply)
     long len = 0;
     const char *pointer = (const char *)reply;
     FILE *file = NULL;
-    char filename[MAX_NAME_LEN] = {'\0'}; // gefällt mir noch nicht ganz
+    char filename[MAX_NAME_LEN] = {'\0'};
 
     // search for status
     // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen
@@ -237,6 +245,7 @@ static long handle_reply(const char *const reply)
         pointer += 4; // strlen("len=") == 4
         errno = 0;
         len = strtol_e(pointer);
+
         if (len == REPLY_ERROR)
         {
             fprintf(stderr, "%s: Error: strtol failed\n", cmd);
@@ -272,6 +281,7 @@ static long handle_reply(const char *const reply)
             fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
             return REPLY_ERROR;
         }
+
     } // end while
 
     return status;

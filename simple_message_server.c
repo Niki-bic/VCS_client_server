@@ -81,7 +81,11 @@ int main(const int argc, const char *const *argv)
 
         if (bind(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen) == -1)
         {
-            close_e(socket_listen);
+            if (close(socket_listen) == -1)
+            {
+                freeaddrinfo(result);
+                return EXIT_FAILURE;
+            }
             continue;
         }
 
@@ -90,7 +94,11 @@ int main(const int argc, const char *const *argv)
             break;
         }
 
-        close_e(socket_listen);
+        if (close(socket_listen) == -1)
+        {
+            freeaddrinfo(result);
+            return EXIT_FAILURE;
+        }
     }
 
     freeaddrinfo(result);
@@ -119,6 +127,7 @@ int main(const int argc, const char *const *argv)
     while (TRUE)
     {
         errno = 0;
+
         if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, &res_ptr->ai_addrlen)) == -1)
         {
             if (errno == EINTR)
@@ -199,7 +208,8 @@ static void handle_sigchild(int s)
     errno = saved_errno;
 } // end handle_sigchild()
 
-static void remove_resources_and_exit(const int socket_listen, const int socket_connect, const int exitcode)
+static void remove_resources_and_exit(const int socket_listen,
+                                      const int socket_connect, const int exitcode)
 {
     if (socket_listen != -1)
     {
@@ -228,5 +238,6 @@ static void usage(FILE *const stream, const char *cmnd, const int exitcode)
     -p, --port <port>\n\t\
     -h, --help\n",
             cmnd);
+
     exit(exitcode);
 } // end usage()

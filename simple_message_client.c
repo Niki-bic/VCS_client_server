@@ -180,31 +180,13 @@ int main(const int argc, const char *const *argv)
 
     errno = 0;
 
-    if (fclose(file_read) == -1)
-    {
-        fprintf(stderr, "%s: Error closing file failed: %s\n", cmd, strerror(errno));
-        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
-    }
+    (void)fclose(file_read); // keine Error-checking wenn nur gelesen
 
     // close nicht notwendig, da fclose() auch den
     // darunter liegenden Deskriptor schließt (man-page)
 
     return (int)status;
 } // end main()
-
-static void usage(FILE *stream, const char *cmnd, int exitcode)
-{
-    fprintf(stream, "usage: %s options\noptions:\n\t\
-    -s, --server <server>   full qualified domain name or IP address of the server\n\t\
-    -p, --port <port>       well-known port of the server [0..65535]\n\t\
-    -u, --user <name>       name of the posting user\n\t\
-    -i, --image <URL>       URL pointing to an image of the posting user\n\t\
-    -m, --message <message> message to be added to the bulletin board\n\t\
-    -v, --verbose           verbose output\n\t\
-    -h, --help\n",
-            cmnd);
-    exit(exitcode);
-} // end usage()
 
 // eventuell split_input aus simple_message_server_logic abkupfern
 static long handle_reply(const char *const reply)
@@ -294,44 +276,11 @@ static long handle_reply(const char *const reply)
     return status;
 } // end handle_reply()
 
-static long strtol_e(const char *const string)
-{
-    char *end_ptr;
-    errno = 0;
-    long number = strtol(string, &end_ptr, 10);
-
-    if (string == NULL)
-    {
-        fprintf(stderr, "%s: number : %lu invalid (no digits found, 0 returned)\n", cmd, number);
-        return REPLY_ERROR;
-    }
-    else if (errno == ERANGE && number == 0)
-    {
-        fprintf(stderr, "%s: number : %lu invalid (underflow occurred)\n", cmd, number);
-        return REPLY_ERROR;
-    }
-    else if (errno == ERANGE && number == LONG_MAX)
-    {
-        fprintf(stderr, "%s: number : %lu invalid (overflow occurred)\n", cmd, number);
-        return REPLY_ERROR;
-    }
-    else if (errno == EINVAL)
-    {
-        fprintf(stderr, "%s: number : %lu invalid (base contains unsupported value)\n", cmd, number);
-        return REPLY_ERROR;
-    }
-    else if (errno != 0 && number == 0)
-    {
-        fprintf(stderr, "%s: number : %lu invalid (unspecified error occurred)\n", cmd, number);
-        return REPLY_ERROR;
-    }
-
-    return number;
-} // end strtol_e()
-
-static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read, FILE *const file_write, const int exitcode)
+static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
+                                      FILE *const file_write, const int exitcode)
 {
     int exit_status = (int)exitcode;
+
     if (file_read != NULL)
     {
         if (fclose(file_read) != 0)
@@ -371,4 +320,53 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
     }
 
     exit(exit_status);
-} // end remove_resources
+} // end remove_resources()
+
+static long strtol_e(const char *const string)
+{
+    char *end_ptr;
+    errno = 0;
+    long number = strtol(string, &end_ptr, 10);
+
+    if (string == NULL)
+    {
+        fprintf(stderr, "%s: number : %lu invalid (no digits found, 0 returned)\n", cmd, number);
+        return REPLY_ERROR;
+    }
+    else if (errno == ERANGE && number == 0)
+    {
+        fprintf(stderr, "%s: number : %lu invalid (underflow occurred)\n", cmd, number);
+        return REPLY_ERROR;
+    }
+    else if (errno == ERANGE && number == LONG_MAX)
+    {
+        fprintf(stderr, "%s: number : %lu invalid (overflow occurred)\n", cmd, number);
+        return REPLY_ERROR;
+    }
+    else if (errno == EINVAL)
+    {
+        fprintf(stderr, "%s: number : %lu invalid (base contains unsupported value)\n", cmd, number);
+        return REPLY_ERROR;
+    }
+    else if (errno != 0 && number == 0)
+    {
+        fprintf(stderr, "%s: number : %lu invalid (unspecified error occurred)\n", cmd, number);
+        return REPLY_ERROR;
+    }
+
+    return number;
+} // end strtol_e()
+
+static void usage(FILE *stream, const char *cmnd, int exitcode)
+{
+    fprintf(stream, "usage: %s options\noptions:\n\t\
+    -s, --server <server>   full qualified domain name or IP address of the server\n\t\
+    -p, --port <port>       well-known port of the server [0..65535]\n\t\
+    -u, --user <name>       name of the posting user\n\t\
+    -i, --image <URL>       URL pointing to an image of the posting user\n\t\
+    -m, --message <message> message to be added to the bulletin board\n\t\
+    -v, --verbose           verbose output\n\t\
+    -h, --help\n",
+            cmnd);
+    exit(exitcode);
+} // end usage()

@@ -25,9 +25,9 @@
 
 const char *cmd = NULL; // globaler Speicher für argv[0]
 
-static long handle_reply(const char * const reply);
-static void remove_resources(int socket_read, int socket_write, FILE *file_read,
-                             FILE *file_write, int exit_status);
+static long handle_reply(const char *const reply);
+static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
+                                      FILE *const file_write, const int exitcode);
 static long strtol_e(const char *const string);
 static void usage(FILE *stream, const char *cmnd, int exitcode);
 
@@ -88,7 +88,7 @@ int main(const int argc, const char *const *argv)
             break;
         }
 
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     freeaddrinfo(result);
@@ -96,7 +96,7 @@ int main(const int argc, const char *const *argv)
     if (res_ptr == NULL)
     {
         fprintf(stderr, "%s: Error: Client failed to connect\n", cmd);
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -104,7 +104,7 @@ int main(const int argc, const char *const *argv)
     if ((socket_read = dup(socket_write)) == -1)
     {
         fprintf(stderr, "%s: Error duplicating file descriptor: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -112,7 +112,7 @@ int main(const int argc, const char *const *argv)
     if ((file_write = fdopen(socket_write, "w")) == NULL)
     {
         fprintf(stderr, "%s: Error opening file: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -120,7 +120,7 @@ int main(const int argc, const char *const *argv)
     if ((file_read = fdopen(socket_read, "r")) == NULL)
     {
         fprintf(stderr, "%s: Error opening file: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     // line-buffering einstellen?
@@ -135,7 +135,7 @@ int main(const int argc, const char *const *argv)
         if (fprintf(file_write, "user=%s\n%s\n", user, message) < 0)
         {
             fprintf(stderr, "%s: Error writing in stream: %s\n", cmd, strerror(errno)); // error fprintf
-            remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+            remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
         }
     }
     else // img_url != NULL
@@ -143,7 +143,7 @@ int main(const int argc, const char *const *argv)
         if (fprintf(file_write, "user=%s\nimg=%s\n%s\n", user, img_url, message) < 0)
         {
             fprintf(stderr, "%s: Error writing in stream: %s\n", cmd, strerror(errno));
-            remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+            remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
         }
     }
 
@@ -152,7 +152,7 @@ int main(const int argc, const char *const *argv)
     if (fflush(file_write) != 0)
     {
         fprintf(stderr, "%s: Error flushing write stream: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -160,7 +160,7 @@ int main(const int argc, const char *const *argv)
     if (shutdown(fileno(file_write), SHUT_WR) == -1)
     {
         fprintf(stderr, "%s: Error shutdown write socket failed: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -168,7 +168,7 @@ int main(const int argc, const char *const *argv)
     if (fclose(file_write) == -1)
     {
         fprintf(stderr, "%s: Error closing file failed: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     // einlesen des reply // bis hierher kommt er bei TESTCASE=3
@@ -181,7 +181,8 @@ int main(const int argc, const char *const *argv)
     status = handle_reply(reply);
     if (status == REPLY_ERROR)
     {
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        fprintf(stderr, "%s: Error in handle_reply\n", cmd);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     errno = 0;
@@ -189,13 +190,13 @@ int main(const int argc, const char *const *argv)
     if (fclose(file_read) == -1)
     {
         fprintf(stderr, "%s: Error closing file failed: %s\n", cmd, strerror(errno));
-        remove_resources(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
     // close nicht notwendig, da fclose() auch den
     // darunter liegenden Deskriptor schließt (man-page)
 
-    return (long)status;
+    return (int)status;
 } // end main()
 
 static void usage(FILE *stream, const char *cmnd, int exitcode)
@@ -213,11 +214,11 @@ static void usage(FILE *stream, const char *cmnd, int exitcode)
 } // end usage()
 
 // eventuell split_input aus simple_message_server_logic abkupfern
-static long handle_reply(const char * const reply)
+static long handle_reply(const char *const reply)
 {
     long status = 0;
-    unsigned long len = 0;
-    char *pointer = (char *)reply;
+    long len = 0;
+    const char *pointer = (const char *)reply;
     FILE *file = NULL;
     char filename[BUF_LEN] = {'\0'}; // gefällt mir noch nicht ganz
 
@@ -260,7 +261,7 @@ static long handle_reply(const char * const reply)
         pointer += 4; // strlen("len=") == 4
         errno = 0;
         len = strtol_e(pointer);
-        if ((long)len == REPLY_ERROR)
+        if (len == REPLY_ERROR)
         {
             fprintf(stderr, "%s: Error: strtol failed\n", cmd);
             return REPLY_ERROR;
@@ -282,7 +283,7 @@ static long handle_reply(const char * const reply)
 
         errno = 0;
 
-        if (fwrite(pointer, sizeof(char), len, file) < len)
+        if (fwrite(pointer, sizeof(char), len, file) < (unsigned long)len)
         {
             fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
             return REPLY_ERROR;
@@ -335,13 +336,15 @@ static long strtol_e(const char *const string)
     return number;
 } // end strtol_e()
 
-static void remove_resources(int socket_read, int socket_write, FILE *file_read, FILE *file_write, int exit_status)
+static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read, FILE *const file_write, const int exitcode)
 {
+    int exit_status = (int)exitcode;
     if (file_read != NULL)
     {
         if (fclose(file_read) != 0)
         {
             fprintf(stderr, "%s: Error while closing file\n", cmd);
+            exit_status = EXIT_FAILURE;
         }
         socket_read = -1;
     }
@@ -351,6 +354,7 @@ static void remove_resources(int socket_read, int socket_write, FILE *file_read,
         if (fclose(file_write) != 0)
         {
             fprintf(stderr, "%s: Error while closing file\n", cmd);
+            exit_status = EXIT_FAILURE;
         }
         socket_write = -1;
     }
@@ -360,6 +364,7 @@ static void remove_resources(int socket_read, int socket_write, FILE *file_read,
         if (close(socket_read) != 0)
         {
             fprintf(stderr, "%s: Error while closing socket\n", cmd);
+            exit_status = EXIT_FAILURE;
         }
     }
 
@@ -368,6 +373,7 @@ static void remove_resources(int socket_read, int socket_write, FILE *file_read,
         if (close(socket_write) != 0)
         {
             fprintf(stderr, "%s: Error while closing socket\n", cmd);
+            exit_status = EXIT_FAILURE;
         }
     }
 

@@ -14,6 +14,7 @@
 #include "client_server.h"
 
 #define BUF_LEN (1024 * 1024) // noch überlegen wie lang notwendig
+#define MAX_NAME_LEN 4096
 #define REPLY_ERROR -3l
 
 const char *cmd = NULL; // globaler Speicher für argv[0]
@@ -166,7 +167,7 @@ int main(const int argc, const char *const *argv)
 
     // einlesen des reply // bis hierher kommt er bei TESTCASE=3
     int i = 0;
-    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0 && i < BUF_LEN)
+    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0 && i < BUF_LEN / 100)
     {
         i++;
     }
@@ -195,7 +196,7 @@ static long handle_reply(const char *const reply)
     long len = 0;
     const char *pointer = (const char *)reply;
     FILE *file = NULL;
-    char filename[BUF_LEN] = {'\0'}; // gefällt mir noch nicht ganz
+    char filename[MAX_NAME_LEN] = {'\0'}; // gefällt mir noch nicht ganz
 
     // search for status
     // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen
@@ -224,7 +225,7 @@ static long handle_reply(const char *const reply)
 
         pointer += 5; // strlen("file=") == 5
         int i = 0;
-        memset(filename, 0, BUF_LEN);
+        memset(filename, 0, MAX_NAME_LEN);
         while (*pointer != '\n')
         {
             filename[i] = *pointer;

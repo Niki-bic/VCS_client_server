@@ -192,19 +192,23 @@ int main(const int argc, const char *const *argv)
         fprintf(stderr, "%s: Error no proper address-information found\n", cmd);
         remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
     }
-
+	
+	errno = 0;
+	
     sa.sa_handler = handle_sigchild; // reap all dead processes
     if (sigemptyset(&sa.sa_mask) == -1)
     {
-        fprintf(stderr, "%s: Error in sigemptyset\n", cmd);
+        fprintf(stderr, "%s: Error in sigemptyset: %s\n", cmd, strerror(errno));
         remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
     }
 
     sa.sa_flags = SA_RESTART;
-
+	
+	errno = 0;
+	
     if (sigaction(SIGCHLD, &sa, NULL) == -1)
     {
-        fprintf(stderr, "%s: Error in sigaction\n", cmd);
+        fprintf(stderr, "%s: Error in sigaction: %s\n", cmd, strerror(errno));
         remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
     }
 
@@ -220,17 +224,19 @@ int main(const int argc, const char *const *argv)
             }
             else
             {
-                fprintf(stderr, "%s: Error in accepting connection\n", cmd);
+                fprintf(stderr, "%s: Error in accepting connection: %s\n", cmd, strerror(errno));
                 remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
             }
 
             continue;
         }
-
+		
+		errno = 0;
+		
         switch (pid = fork())
         {
         case -1: // fehler bei fork()
-            fprintf(stderr, "%s: Error in fork\n", cmd);
+            fprintf(stderr, "%s: Error in fork: %s\n", cmd, strerror(errno));
             remove_resources_and_exit(socket_listen, socket_connect, EXIT_FAILURE);
             break; // eigentlich nicht notwendig
 

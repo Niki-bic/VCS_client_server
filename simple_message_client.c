@@ -1,25 +1,24 @@
 // todo:
-// wie lang muss BUF_LEN sei, d.h. wie lang kann der reply sein?
+// wie lang muss BUF_LEN sei, d.h. wie lang kann der reply sein? -- DONE
 // error-checking, errno einbauen, Ressourcen im Fehlerfall richtig wergräumen
 // d.h. Deskriptoren schließen, File-Pointer schließen etc
 // ausprobieren ob -i (bzw -image) funktioniert  -- DONE
 // testcases checken
-// eventuell modularer aufbauen, auslagern was auch der server braucht
-// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhaupt geschlossen werden
+// eventuell modularer aufbauen, auslagern was auch der server braucht -- DONE
+// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhaupt geschlossen werden -- DONE
 // -h einbauen -- DONE
-// das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases)
+// das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases) -- DONE
 
 #include <limits.h>
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-#define BUF_LEN 8192 // noch überlegen wie lang notwendig
+#define BUF_LEN 8192
 #define MAX_NAME_LEN 256
 #define REPLY_ERROR -3l
 
 const char *cmd = NULL; // globaler Speicher für argv[0]
 
-static long get_status(char *const reply, FILE *const file_read);
 static long handle_reply(char *reply, FILE *const file_read);
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode);
@@ -118,10 +117,6 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    // line-buffering einstellen?
-    // setvbuf(file_ptr_write, request, _IOLBF, sizeof(request));
-    // setvbuf(file_ptr_read, reply, _IOLBF, sizeof(reply));
-
     errno = 0;
 
     // sending request
@@ -168,31 +163,30 @@ int main(const int argc, const char *const *argv)
 
     // einlesen des reply // bis hierher kommt er bei TESTCASE=3
 
-    if ((status = get_status(reply, file_read)) == REPLY_ERROR)
-    {
-        fprintf(stderr, "%s: Error in get_staus\n", cmd);
-        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
-    }
-
-    if (handle_reply(reply, file_read) == REPLY_ERROR)
+    if ((status = handle_reply(reply, file_read)) == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    (void)fclose(file_read); // keine Error-checking wenn nur gelesen
+    (void)fclose(file_read); // keine Error-checking wenn nur gelesen wird
 
     // close nicht notwendig, da fclose() auch den
-    // darunter liegenden Deskriptor schließt (man-page)
+    // darunter liegenden Deskriptor schließt (lt. man-page)
 
     return (int)status;
 } // end main()
 
-// eventuell split_input aus simple_message_server_logic abkupfern
-static long get_status(char *const reply, FILE *const file_read)
+static long handle_reply(char *reply, FILE *const file_read)
 {
     long status = 0;
-    const char *pointer = NULL;
+    char filename[MAX_NAME_LEN] = {'\0'};
+    long len = 0;
+
+    FILE *file = NULL;
+    char *pointer = NULL;
+
+    int read_count = 0;
 
     if (fread(reply, sizeof(char), strlen("status=x\n"), file_read) < strlen("status=x\n"))
     {
@@ -219,22 +213,6 @@ static long get_status(char *const reply, FILE *const file_read)
         fprintf(stderr, "%s: Error: strtol failed\n", cmd);
         return REPLY_ERROR;
     }
-
-    return status;
-} // end get_status()
-
-static long handle_reply(char *reply, FILE *const file_read)
-{
-    // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen
-    // filename erstellen und den content (d.h. die nächsten len-Bytes) reinschreiben.
-
-    char filename[MAX_NAME_LEN] = {'\0'};
-    long len = 0;
-
-    FILE *file = NULL;
-    char *pointer = NULL;
-
-    int read_count = 0;
 
     do
     {
@@ -306,7 +284,7 @@ static long handle_reply(char *reply, FILE *const file_read)
 
     } while (read_count == BUF_LEN);
 
-    return 0l;
+    return status;
 } // end handle_reply()
 
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,

@@ -13,13 +13,14 @@
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-#define BUF_LEN (1024 * 1024 * 1024 + 2000) // noch überlegen wie lang notwendig
-#define MAX_NAME_LEN 4096
+#define BUF_LEN 8192 // noch überlegen wie lang notwendig
+#define MAX_NAME_LEN 256
 #define REPLY_ERROR -3l
 
 const char *cmd = NULL; // globaler Speicher für argv[0]
 
-static long handle_reply(const char *const reply);
+static long get_status(char *const reply, FILE *const file_read);
+static long handle_reply(char *reply, FILE *const file_read);
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode);
 static long strtol_e(const char *const string); // Error-checking-Wrapper um strtol()
@@ -55,7 +56,7 @@ int main(const int argc, const char *const *argv)
 
     long status = -1;
 
-    char *reply = NULL;
+    char reply[BUF_LEN] = {'\0'};
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // egal ob IP4 oder IP6
@@ -165,29 +166,19 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    if ((reply = calloc(BUF_LEN, sizeof(char))) == NULL) {
-        fprintf(stderr, "%s: Error in calloc\n", cmd);
+    // einlesen des reply // bis hierher kommt er bei TESTCASE=3
+
+    if ((status = get_status(reply, file_read)) == REPLY_ERROR)
+    {
+        fprintf(stderr, "%s: Error in get_staus\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    // einlesen des reply // bis hierher kommt er bei TESTCASE=3
-    int i = 0;
-    while (fread(&reply[i * 100], sizeof(reply[0]), 100, file_read) != 0 && i < BUF_LEN / 100)
-    {
-        i++;
-    }
-
-    status = handle_reply(reply);
-
-    free(reply);
-
-    if (status == REPLY_ERROR)
+    if (handle_reply(reply, file_read) == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
-
-    errno = 0;
 
     (void)fclose(file_read); // keine Error-checking wenn nur gelesen
 
@@ -198,17 +189,18 @@ int main(const int argc, const char *const *argv)
 } // end main()
 
 // eventuell split_input aus simple_message_server_logic abkupfern
-static long handle_reply(const char *const reply)
+static long get_status(char *const reply, FILE *const file_read)
 {
     long status = 0;
-    long len = 0;
-    const char *pointer = (const char *)reply;
-    FILE *file = NULL;
-    char filename[MAX_NAME_LEN] = {'\0'};
+    const char *pointer = NULL;
+
+    if (fread(reply, sizeof(char), strlen("status=x\n"), file_read) < strlen("status=x\n"))
+    {
+        fprintf(stderr, "%s: Error in fread\n", cmd);
+        return REPLY_ERROR;
+    }
 
     // search for status
-    // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen
-    // filename erstellen und den content (d.h. die nächsten len-Bytes) reinschreiben.
 
     if ((pointer = strstr(reply, "status=")) == NULL)
     {
@@ -216,75 +208,105 @@ static long handle_reply(const char *const reply)
         return REPLY_ERROR;
     }
 
-    pointer += 7; // strlen("status=") == 7
+    pointer += 7; // strlen(status=) == 7
+
+    errno = 0;
+
     status = strtol_e(pointer);
+
     if (status == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error: strtol failed\n", cmd);
         return REPLY_ERROR;
     }
 
-    while (TRUE)
-    {
-        if ((pointer = strstr(pointer, "file=")) == NULL)
-        {
-            break;
-        }
-
-        pointer += 5; // strlen("file=") == 5
-        int i = 0;
-        memset(filename, 0, MAX_NAME_LEN);
-        while (*pointer != '\n')
-        {
-            filename[i] = *pointer;
-            i++;
-            pointer++;
-        }
-        pointer++; // newline-Zeichen schlucken
-
-        pointer += 4; // strlen("len=") == 4
-        errno = 0;
-        len = strtol_e(pointer);
-
-        if (len == REPLY_ERROR)
-        {
-            fprintf(stderr, "%s: Error: strtol failed\n", cmd);
-            return REPLY_ERROR;
-        }
-
-        while (*pointer != '\n') // Längenangabe überspringen
-        {
-            pointer++;
-        }
-        pointer++; // newline-Zeichen schlucken
-
-        errno = 0;
-
-        if ((file = fopen(filename, "w")) == NULL)
-        {
-            fprintf(stderr, "%s: Error opening file %s: %s\n", cmd, filename, strerror(errno));
-            return REPLY_ERROR;
-        }
-
-        errno = 0;
-
-        if (fwrite(pointer, sizeof(char), len, file) < (unsigned long)len)
-        {
-            fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
-            return REPLY_ERROR;
-        }
-
-        errno = 0;
-
-        if (fclose(file) == -1)
-        {
-            fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
-            return REPLY_ERROR;
-        }
-
-    } // end while
-
     return status;
+} // end get_status()
+
+static long handle_reply(char *reply, FILE *const file_read)
+{
+    // dann in einer Schleife file (= filename) und len auslesen, und eine file mit Namen
+    // filename erstellen und den content (d.h. die nächsten len-Bytes) reinschreiben.
+
+    char filename[MAX_NAME_LEN] = {'\0'};
+    long len = 0;
+
+    FILE *file = NULL;
+    char *pointer = NULL;
+
+    int read_count = 0;
+
+    do
+    {
+        read_count = fread(reply, sizeof(char), BUF_LEN, file_read);
+        pointer = reply;
+
+        while (TRUE)
+        {
+            if ((pointer = strstr(pointer, "file=")) == NULL)
+            {
+                break;
+            }
+
+            pointer += 5; // strlen("file=") == 5
+            memset(filename, '\0', MAX_NAME_LEN);
+            int i = 0;
+
+            while (*pointer != '\n') // no overflow possible (MAX_NAME_LEN < BUF_LEN)
+            {
+                filename[i] = *pointer;
+                i++;
+                pointer++;
+            }
+            pointer++; // newline-Zeichen schlucken
+
+            pointer += 4; // strlen("len=") == 4
+
+            errno = 0;
+
+            len = strtol_e(pointer);
+
+            if (len == REPLY_ERROR)
+            {
+                fprintf(stderr, "%s: Error: strtol failed\n", cmd);
+                return REPLY_ERROR;
+            }
+
+            while (*pointer != '\n') // Längenangabe überspringen
+            {
+                pointer++;
+            }
+            pointer++; // newline-Zeichen schlucken
+
+            errno = 0;
+
+            if ((file = fopen(filename, "w")) == NULL)
+            {
+                fprintf(stderr, "%s: Error opening file %s: %s\n", cmd, filename, strerror(errno));
+                return REPLY_ERROR;
+            }
+
+            errno = 0;
+
+            if (fwrite(pointer, sizeof(char), len, file) < (unsigned long)len)
+            {
+                fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
+                return REPLY_ERROR;
+            }
+
+            errno = 0;
+
+            if (fclose(file) == -1)
+            {
+                fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
+                return REPLY_ERROR;
+            }
+
+        } // end while(TRUE)
+
+    } while (read_count == BUF_LEN);
+
+    return 0l;
 } // end handle_reply()
 
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,

@@ -9,8 +9,8 @@ ersten überschreibt?
 * @file simple_message_server.c
 * VCS Projekt - client server TCP
 * 
-* @author Patrik Binder <ic19b030@technikum-wien.at>
-* @author Nikolaus Ferchenbauer <ic19b013@technikum-wien.at>
+* @author Binder Patrik         <ic19b030@technikum-wien.at>
+* @author Ferchenbauer Nikolaus <ic19b013@technikum-wien.at>
 * @date 2020/12/06
 */
 
@@ -18,20 +18,18 @@ ersten überschreibt?
 #include <sys/wait.h>
 #include "client_server.h"
 
-
-#define BACKLOG 5 // wie groß tatsächlich?
-/** defines FALSE 1*/
+#define BACKLOG 10
+/** defines TRUE 1*/
 #define TRUE 1
 /** defines FALSE 0*/
 #define FALSE 0
 
 /**global storage for argv[0] */
-const char *cmd = NULL; // globaler Speicher für argv[0] damit es nicht
-                        // jeder Funktion mitgegeben werden muss
-						
+const char *cmd = NULL;
+
 /**
- * \brief close_e - closes the socket and checks for errors 
- * @details this function closes the socket stream and checks if an 
+ * \brief close_e - closes socket and checks for errors 
+ * @details this function closes the socket and checks if an 
  * error occours, if an error occours the server is stopped with EXIT FAILURE
  *
  * \param socket socket stream
@@ -39,11 +37,11 @@ const char *cmd = NULL; // globaler Speicher für argv[0] damit es nicht
  * \return no return
 */
 
-static void close_e(const int socket);              // Error-checking-Wrapper um close()
+static void close_e(const int socket);
 
 /**
- * \brief dub2_e - duplicates file discriptor and checks for errors 
- * @details this function dublicates the file discriptor and checks if an 
+ * \brief dup2_e - duplicates file descriptor and checks for errors 
+ * @details this function duplicates the file descriptor and checks if an 
  * error occours, if an error occours the streams are closed and the server ist stopped with EXIT_FAILURE
  *
  * \param socket socket stream
@@ -51,62 +49,60 @@ static void close_e(const int socket);              // Error-checking-Wrapper um
  * \return no return
 */
 
-
-static void dup2_e(int socket_old, int socket_new); // Error-checking-Wrapper um dup2()
+static void dup2_e(int socket_old, int socket_new);
 
 /**
- * \brief handle_sigchild - 
- * @details 
+ * \brief handle_sigchild - callback-function for signal
+ * @details this function is called on termination of the child-process
+ * (which implements the server-logic) to reap the exit-status
  *
  * \param s
  *
  * \return no return
 */
 
-
 static void handle_sigchild(int s);
 
 /**
- * \brief remove_resources_and_exit - closes the socket streams and checks for errors 
+ * \brief remove_resources_and_exit - closes the socket and checks for errors 
  * @details this function closes the connect and listen socket streams and checks if an 
  * error occours, if an error occours the server is stopped with EXIT FAILURE
  *
- * \param socket_listen listen socket stream
- * \param socket_connect connected socket stream
+ * \param socket_listen listening socket
+ * \param socket_connect connected socket
  * \param exitcode 
  *
  * \return no return
 */
 
-
 static void remove_resources_and_exit(const int socket_listen,
                                       const int socket_connect, const int exitcode);
-								  
+
 /**
  * \brief usage - usage for server
  * @details this function shows which parameters can be used in the server program
  *
  * \param stream output stream where the usage is writen
- * \param cmnd global storage for argv[0]
+ * \param cmnd argv[0]
  * \param exitcode
  
  * \return no return
-*/									  
-								  
+*/
+
 static void usage(FILE *const stream, const char *cmnd, const int exitcode);
 
 /**
  *
  * \brief The main function starts an TCP server.
  * @details This function initializes a server with a choosen server port,
- * clients are able to connect to this server an are able to communicate with it 
+ * clients are able to connect to this server and are able to communicate with it 
  * 
  * \param argc the number of arguments
  * \param argv command line arguments (including the program name in argv[0])
  *
  * \return no return
  */
- 
+
 int main(const int argc, const char *const *argv)
 {
     cmd = argv[0];
@@ -144,9 +140,9 @@ int main(const int argc, const char *const *argv)
     int pid = -1;
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP
-    hints.ai_flags = AI_PASSIVE;     // IP automatisch ausfüllen
+    hints.ai_flags = AI_PASSIVE;     // IP automatic
 
     if (getaddrinfo(NULL, port, &hints, &result) != 0)
     {
@@ -192,9 +188,9 @@ int main(const int argc, const char *const *argv)
         fprintf(stderr, "%s: Error no proper address-information found\n", cmd);
         remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
     }
-	
-	errno = 0;
-	
+
+    errno = 0;
+
     sa.sa_handler = handle_sigchild; // reap all dead processes
     if (sigemptyset(&sa.sa_mask) == -1)
     {
@@ -203,9 +199,9 @@ int main(const int argc, const char *const *argv)
     }
 
     sa.sa_flags = SA_RESTART;
-	
-	errno = 0;
-	
+
+    errno = 0;
+
     if (sigaction(SIGCHLD, &sa, NULL) == -1)
     {
         fprintf(stderr, "%s: Error in sigaction: %s\n", cmd, strerror(errno));
@@ -230,30 +226,30 @@ int main(const int argc, const char *const *argv)
 
             continue;
         }
-		
-		errno = 0;
-		
+
+        errno = 0;
+
         switch (pid = fork())
         {
-        case -1: // fehler bei fork()
+        case -1: // error in fork()
             fprintf(stderr, "%s: Error in fork: %s\n", cmd, strerror(errno));
             remove_resources_and_exit(socket_listen, socket_connect, EXIT_FAILURE);
-            break; // eigentlich nicht notwendig
+            break; // not necessary but emphasizes the end of case 1
 
         case 0: // child
             close_e(socket_listen);
 
-            // socket duplizieren und auf stdin und stdout umlenken
+            // redirect stdin and stdout to socket_connect
             dup2_e(socket_connect, STDOUT_FILENO);
             dup2_e(socket_connect, STDIN_FILENO);
 
             close_e(socket_connect);
 
             execlp("simple_message_server_logic", "simple_message_server_logic", (char *)NULL);
-            // error, hier nur wenn execlp versagt
+            // error in execlp
 
             remove_resources_and_exit(socket_listen, socket_connect, EXIT_FAILURE);
-            break; // eigentliche nicht notwendig
+            break; // not necessary but emphasizes the end of case 0
 
         default: // parent
             close_e(socket_connect);

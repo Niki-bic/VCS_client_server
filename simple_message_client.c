@@ -22,9 +22,9 @@
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-/**buffer length*/
+/**reply maximum buffer length*/
 #define BUF_LEN 8192
-/**maxmimum filename length*/
+/**filename maximum length*/
 #define MAX_NAME_LEN 256
 /**reply error value*/
 #define REPLY_ERROR -3l
@@ -38,13 +38,12 @@ const char *cmd = NULL;
  * and 'len' than it writes the content of the file in the .html and .png file. If 
  * an error occours the client is stopped with EXIT_FAILURE
  *
- * \param reply - variable to save the reply from the server
  * \param file_read - read from stream
  *
  * \return status value
 */
 
-static long handle_reply(char *reply, FILE *const file_read);
+static long handle_reply(FILE *const file_read);
 
 /**
  * \brief remove_resources_and_exit - closes the streams and checks for errors 
@@ -129,8 +128,6 @@ int main(const int argc, const char *const *argv)
     FILE *file_read = NULL;
 
     long status = -1;
-
-    char reply[BUF_LEN] = {'\0'};
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
@@ -237,7 +234,7 @@ int main(const int argc, const char *const *argv)
     }
 
     // reading reply
-    if ((status = handle_reply(reply, file_read)) == REPLY_ERROR)
+    if ((status = handle_reply(file_read)) == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
@@ -245,25 +242,24 @@ int main(const int argc, const char *const *argv)
 
     (void)fclose(file_read); // no error-checking on a readonly file
 
-    // fclose() also close the underlying descriptor, so no close() necessary
+    // fclose() also closes the underlying descriptor, so no close() necessary
 
     return (int)status;
 } // end main()
 
-static long handle_reply(char *reply, FILE *const file_read)
+static long handle_reply(FILE *const file_read)
 {
-    long status = 0;
+    char reply[BUF_LEN] = {'\0'};
     char filename[MAX_NAME_LEN] = {'\0'};
+    long status = 0;
     long len = 0;
 
     FILE *file = NULL;
     char *pointer = NULL;
 
-    int read_count = 0;
-
-    if (fread(reply, sizeof(char), strlen("status=x\n"), file_read) < strlen("status=x\n"))
+    if (fgets(reply, BUF_LEN, file_read) == NULL)
     {
-        fprintf(stderr, "%s: Error in fread\n", cmd);
+        fprintf(stderr, "%s: Error in fgets\n", cmd);
         return REPLY_ERROR;
     }
 
@@ -274,7 +270,7 @@ static long handle_reply(char *reply, FILE *const file_read)
         return REPLY_ERROR;
     }
 
-    pointer += 7; // strlen(status=) == 7
+    pointer += 7; // strlen("status=") == 7
 
     errno = 0;
 
@@ -286,76 +282,89 @@ static long handle_reply(char *reply, FILE *const file_read)
         return REPLY_ERROR;
     }
 
-    do
+    while (TRUE)
     {
-        read_count = fread(reply, sizeof(char), BUF_LEN, file_read);
-
-        pointer = reply;
-
-        while (TRUE)
+        if (fgets(reply, BUF_LEN, file_read) == NULL)
         {
-            if ((pointer = strstr(pointer, "file=")) == NULL)
-            {
-                break;
-            }
+            break;
+        }
 
-            pointer += 5; // strlen("file=") == 5
-            memset(filename, '\0', MAX_NAME_LEN);
-            int i = 0;
+        if (strncmp(reply, "file=", 5) != 0)
+        {
+            continue;
+        }
 
-            while (*pointer != '\n') // no overflow possible (MAX_NAME_LEN < BUF_LEN)
-            {
-                filename[i] = *pointer;
-                i++;
-                pointer++;
-            }
-            pointer++; // newline
+        if ((pointer = strstr(reply, "file=")) == NULL)
+        {
+            fprintf(stderr, "%s: Error: 'file=' not found\n", cmd);
+            return REPLY_ERROR;
+        }
 
-            pointer += 4; // strlen("len=") == 4
+        pointer += 5; // strlen("file=") == 5
+        memset(filename, '\0', MAX_NAME_LEN);
 
-            errno = 0;
+        int i = 0;
+        while (*pointer != '\n')
+        {
+            filename[i] = *pointer;
+            i++;
+            pointer++;
+        }
 
-            len = strtol_e(pointer);
+        if (fgets(reply, BUF_LEN, file_read) == NULL)
+        {
+            fprintf(stderr, "%s: Error in fgets\n", cmd);
+            return REPLY_ERROR;
+        }
 
-            if (len == REPLY_ERROR)
-            {
-                fprintf(stderr, "%s: Error: strtol failed\n", cmd);
-                return REPLY_ERROR;
-            }
+        if ((pointer = strstr(reply, "len=")) == NULL)
+        {
+            fprintf(stderr, "%s: Error: 'len=' not found\n", cmd);
+            return REPLY_ERROR;
+        }
 
-            while (*pointer != '\n')
-            {
-                pointer++;
-            }
-            pointer++; // newline
+        pointer += 4; // strlen("len=") == 4
 
-            errno = 0;
+        errno = 0;
 
-            if ((file = fopen(filename, "w")) == NULL)
-            {
-                fprintf(stderr, "%s: Error opening file %s: %s\n", cmd, filename, strerror(errno));
-                return REPLY_ERROR;
-            }
+        len = strtol_e(pointer);
 
-            errno = 0;
+        if (len == REPLY_ERROR)
+        {
+            fprintf(stderr, "%s: Error: strtol failed\n", cmd);
+            return REPLY_ERROR;
+        }
 
-            if (fwrite(pointer, sizeof(char), len, file) < (unsigned long)len)
-            {
-                fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
-                return REPLY_ERROR;
-            }
+        errno = 0;
 
-            errno = 0;
+        if ((file = fopen(filename, "w")) == NULL)
+        {
+            fprintf(stderr, "%s: Error opening file %s: %s\n", cmd, filename, strerror(errno));
+            return REPLY_ERROR;
+        }
 
-            if (fclose(file) == -1)
-            {
-                fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
-                return REPLY_ERROR;
-            }
+        errno = 0;
 
-        } // end while(TRUE)
+        if (fread(reply, sizeof(char), len, file_read) < (unsigned long)len)
+        {
+            fprintf(stderr, "%s: Error in fread\n", cmd);
+            return REPLY_ERROR;
+        }
 
-    } while (read_count == BUF_LEN);
+        if (fwrite(reply, sizeof(char), len, file) < (unsigned long)len)
+        {
+            fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
+            return REPLY_ERROR;
+        }
+
+        errno = 0;
+
+        if (fclose(file) == -1)
+        {
+            fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
+            return REPLY_ERROR;
+        }
+    } // end while(TRUE)
 
     return status;
 } // end handle_reply()

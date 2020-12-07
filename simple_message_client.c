@@ -117,6 +117,9 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
+    // line-buffering einstellen?
+    // setvbuf(file_read, reply, _IOLBF, sizeof(reply));
+
     errno = 0;
 
     // sending request
@@ -216,7 +219,8 @@ static long handle_reply(char *reply, FILE *const file_read)
 
     do
     {
-        read_count = fread(reply, sizeof(char), BUF_LEN, file_read);
+        read_count = fread(reply, sizeof(char), BUF_LEN, file_read); // blockiert bei Test 3
+
         pointer = reply;
 
         while (TRUE)
@@ -379,5 +383,6 @@ static void usage(FILE *stream, const char *cmnd, int exitcode)
     -v, --verbose           verbose output\n\t\
     -h, --help\n",
             cmnd);
+
     exit(exitcode);
 } // end usage()

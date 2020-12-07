@@ -170,7 +170,7 @@ int main(const int argc, const char *const *argv)
             break;
         } // switch
 
-    } // end while
+    } // end while(TRUE)
 
 } // end main()
 

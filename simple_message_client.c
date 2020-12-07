@@ -9,22 +9,99 @@
 // -h einbauen -- DONE
 // das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases) -- DONE
 
+
+/**
+* @file simple_message_client.c
+* VCS Projekt - client server TCP
+* 
+* @author Patrik Binder <ic19b030@technikum-wien.at>
+* @author Nikolaus Ferchenbauer <ic19b013@technikum-wien.at>
+* @date 2020/12/06
+*/
+
 #include <limits.h>
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-#define BUF_LEN 8192
+/**buffer length*/
+#define BUF_LEN 8192   
+/**maxmimum filename length*/
 #define MAX_NAME_LEN 256
+/**reply error value*/
 #define REPLY_ERROR -3l
 
+
+/**global storage for argv[0] */
 const char *cmd = NULL; // globaler Speicher für argv[0]
 
+/**
+ * \brief handle_reply - handles the replys from server
+ * @details this function took the reply from the server and checks 'status' 
+ * and 'len' than it writes the conten of the file in the .html and .png file. If 
+ * an error occours the client is stopped with EXIT_FAILURE
+ *
+ * \param reply - variable to save the reply from the server
+ * \param file_read - read from stream
+ *
+ * \return status value
+*/
+
 static long handle_reply(char *reply, FILE *const file_read);
+
+/**
+ * \brief remove_resources_and_exit - closes the streams and checks for errors 
+ * @details this function closes the file and socket streams and checks if an 
+ * error occours, if an error occours the client is stopped with EXIT FAILURE
+ *
+ * \param socket_read socket read stream
+ * \param socket_write socket write stream
+ * \param file_read file read stream
+ * \param file_write file write stream
+ * \param exitcode 
+ *
+ * \return no return
+*/
+
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode);
+									  
+/**
+ * \brief strol_e - errorchecked strol 
+ * @details this function checks  possible errors of strlol and returns the converted long number when sucessful
+ *
+ * \param string string converted to long 
+ *
+ *
+ * \return long value
+*/
+
 static long strtol_e(const char *const string); // Error-checking-Wrapper um strtol()
+
+/**
+ * \brief usage - usage for client
+ * @details this function shows which parameters can be used in the client program
+ *
+ * \param stream output stream where the usage is writen
+ * \param cmnd global storage for argv[0]
+ * \param exitcode
+ 
+ * \return no return
+*/
+
 static void usage(FILE *stream, const char *cmnd, int exitcode);
 
+/**
+ *
+ * \brief The main fuction connects the client program to an TCP server.
+ * @details This function initializes a connection to an choosen server port,
+ * the client is able to send a message or a picture to the server.
+ * 
+ * \param argc the number of arguments
+ * \param argv command line arguments (including the program name in argv[0])
+ *
+ * \return no return
+ */
+ 
 int main(const int argc, const char *const *argv)
 {
     cmd = argv[0];
@@ -371,6 +448,7 @@ static long strtol_e(const char *const string)
 
     return number;
 } // end strtol_e()
+
 
 static void usage(FILE *stream, const char *cmnd, int exitcode)
 {

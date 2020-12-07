@@ -9,13 +9,12 @@
 // -h einbauen -- DONE
 // das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases) -- DONE
 
-
 /**
 * @file simple_message_client.c
 * VCS Projekt - client server TCP
 * 
-* @author Patrik Binder <ic19b030@technikum-wien.at>
-* @author Nikolaus Ferchenbauer <ic19b013@technikum-wien.at>
+* @author Binder Patrik         <ic19b030@technikum-wien.at>
+* @author Ferchenbauer Nikolaus <ic19b013@technikum-wien.at>
 * @date 2020/12/06
 */
 
@@ -24,20 +23,19 @@
 #include "client_server.h"
 
 /**buffer length*/
-#define BUF_LEN 8192   
+#define BUF_LEN 8192
 /**maxmimum filename length*/
 #define MAX_NAME_LEN 256
 /**reply error value*/
 #define REPLY_ERROR -3l
 
-
 /**global storage for argv[0] */
-const char *cmd = NULL; // globaler Speicher für argv[0]
+const char *cmd = NULL;
 
 /**
- * \brief handle_reply - handles the replys from server
- * @details this function took the reply from the server and checks 'status' 
- * and 'len' than it writes the conten of the file in the .html and .png file. If 
+ * \brief handle_reply - handles the reply from server
+ * @details this function takes the reply from the server and checks 'status' 
+ * and 'len' than it writes the content of the file in the .html and .png file. If 
  * an error occours the client is stopped with EXIT_FAILURE
  *
  * \param reply - variable to save the reply from the server
@@ -64,7 +62,7 @@ static long handle_reply(char *reply, FILE *const file_read);
 
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode);
-									  
+
 /**
  * \brief strol_e - errorchecked strol 
  * @details this function checks  possible errors of strlol and returns the converted long number when sucessful
@@ -75,14 +73,14 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
  * \return long value
 */
 
-static long strtol_e(const char *const string); // Error-checking-Wrapper um strtol()
+static long strtol_e(const char *const string);
 
 /**
  * \brief usage - usage for client
  * @details this function shows which parameters can be used in the client program
  *
- * \param stream output stream where the usage is writen
- * \param cmnd global storage for argv[0]
+ * \param stream output stream where the usage is written
+ * \param cmnd program name
  * \param exitcode
  
  * \return no return
@@ -93,15 +91,15 @@ static void usage(FILE *stream, const char *cmnd, int exitcode);
 /**
  *
  * \brief The main fuction connects the client program to an TCP server.
- * @details This function initializes a connection to an choosen server port,
- * the client is able to send a message or a picture to the server.
+ * @details This function initializes a connection to a choosen server port,
+ * the client is able to send a message and the URL of a picture to the server.
  * 
  * \param argc the number of arguments
  * \param argv command line arguments (including the program name in argv[0])
  *
- * \return no return
+ * \return status of handle_reply
  */
- 
+
 int main(const int argc, const char *const *argv)
 {
     cmd = argv[0];
@@ -135,7 +133,7 @@ int main(const int argc, const char *const *argv)
     char reply[BUF_LEN] = {'\0'};
 
     memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_UNSPEC;     // egal ob IP4 oder IP6
+    hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP
 
     int s = getaddrinfo(server, port, &hints, &result);
@@ -194,9 +192,6 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    // line-buffering einstellen?
-    // setvbuf(file_read, reply, _IOLBF, sizeof(reply));
-
     errno = 0;
 
     // sending request
@@ -241,18 +236,16 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    // einlesen des reply // bis hierher kommt er bei TESTCASE=3
-
+    // reading reply
     if ((status = handle_reply(reply, file_read)) == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    (void)fclose(file_read); // keine Error-checking wenn nur gelesen wird
+    (void)fclose(file_read); // no error-checking on a readonly file
 
-    // close nicht notwendig, da fclose() auch den
-    // darunter liegenden Deskriptor schließt (lt. man-page)
+    // fclose() also close the underlying descriptor, so no close() necessary
 
     return (int)status;
 } // end main()
@@ -275,7 +268,6 @@ static long handle_reply(char *reply, FILE *const file_read)
     }
 
     // search for status
-
     if ((pointer = strstr(reply, "status=")) == NULL)
     {
         fprintf(stderr, "%s: Error 'status=' not found\n", cmd);
@@ -296,7 +288,7 @@ static long handle_reply(char *reply, FILE *const file_read)
 
     do
     {
-        read_count = fread(reply, sizeof(char), BUF_LEN, file_read); // blockiert bei Test 3
+        read_count = fread(reply, sizeof(char), BUF_LEN, file_read);
 
         pointer = reply;
 
@@ -317,7 +309,7 @@ static long handle_reply(char *reply, FILE *const file_read)
                 i++;
                 pointer++;
             }
-            pointer++; // newline-Zeichen schlucken
+            pointer++; // newline
 
             pointer += 4; // strlen("len=") == 4
 
@@ -331,11 +323,11 @@ static long handle_reply(char *reply, FILE *const file_read)
                 return REPLY_ERROR;
             }
 
-            while (*pointer != '\n') // Längenangabe überspringen
+            while (*pointer != '\n')
             {
                 pointer++;
             }
-            pointer++; // newline-Zeichen schlucken
+            pointer++; // newline
 
             errno = 0;
 
@@ -448,7 +440,6 @@ static long strtol_e(const char *const string)
 
     return number;
 } // end strtol_e()
-
 
 static void usage(FILE *stream, const char *cmnd, int exitcode)
 {

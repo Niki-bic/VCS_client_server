@@ -1,10 +1,3 @@
-/* 
-Verständnisfrage an die Lektoren:
-Wenn sms_logic von stdin liest und angenommen es kommen in kurzer Zeit hintereinander 
-2 Requests von Clients rein, wie kann man sicherstellen, dass der 2. Request nicht den
-ersten überschreibt?
-*/
-
 /**
 * @file simple_message_server.c
 * VCS Projekt - client server TCP
@@ -142,7 +135,7 @@ int main(const int argc, const char *const *argv)
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP
-    hints.ai_flags = AI_PASSIVE;     // IP automatic
+    hints.ai_flags = AI_PASSIVE;     // set IP automatically
 
     if (getaddrinfo(NULL, port, &hints, &result) != 0)
     {

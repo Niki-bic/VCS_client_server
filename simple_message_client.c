@@ -1,14 +1,3 @@
-// todo:
-// wie lang muss BUF_LEN sei, d.h. wie lang kann der reply sein? -- DONE
-// error-checking, errno einbauen, Ressourcen im Fehlerfall richtig wergräumen
-// d.h. Deskriptoren schließen, File-Pointer schließen etc
-// ausprobieren ob -i (bzw -image) funktioniert  -- DONE
-// testcases checken
-// eventuell modularer aufbauen, auslagern was auch der server braucht -- DONE
-// richtiges schließen der filepointer und socket-filedeskriptoren, welche Reihenfolge, welche müssen überhaupt geschlossen werden -- DONE
-// -h einbauen -- DONE
-// das Einlesen des reply noch verbesser (mit Hinblick auf die Testcases) -- DONE
-
 /**
 * @file simple_message_client.c
 * VCS Projekt - client server TCP
@@ -233,14 +222,14 @@ int main(const int argc, const char *const *argv)
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    // reading reply
+    // reading and handling reply
     if ((status = handle_reply(file_read)) == REPLY_ERROR)
     {
         fprintf(stderr, "%s: Error in handle_reply\n", cmd);
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
     }
 
-    (void)fclose(file_read); // no error-checking on a readonly file
+    (void)fclose(file_read); // no error-checking on a read-only file
 
     // fclose() also closes the underlying descriptor, so no close() necessary
 
@@ -251,6 +240,7 @@ static long handle_reply(FILE *const file_read)
 {
     char reply[BUF_LEN] = {'\0'};
     char filename[MAX_NAME_LEN] = {'\0'};
+
     long status = 0;
     long len = 0;
 

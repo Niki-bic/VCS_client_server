@@ -343,18 +343,40 @@ static long handle_reply(FILE *const file_read)
             return REPLY_ERROR;
         }
 
-        errno = 0;
-
-        if (fread(reply, sizeof(char), len, file_read) < (unsigned long)len)
+        while (len > BUF_LEN)
         {
-            fprintf(stderr, "%s: Error in fread\n", cmd);
-            return REPLY_ERROR;
+            if (fread(reply, sizeof(char), BUF_LEN, file_read) < BUF_LEN)
+            {
+                fprintf(stderr, "%s: Error in fread\n", cmd);
+                return REPLY_ERROR;
+            }
+
+            errno = 0;
+
+            if (fwrite(reply, sizeof(char), BUF_LEN, file) < BUF_LEN)
+            {
+                fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
+                return REPLY_ERROR;
+            }
+
+            len -= BUF_LEN;
         }
 
-        if (fwrite(reply, sizeof(char), len, file) < (unsigned long)len)
+        if (len > 0)
         {
-            fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
-            return REPLY_ERROR;
+            if (fread(reply, sizeof(char), len, file_read) < (unsigned long)len)
+            {
+                fprintf(stderr, "%s: Error in fread\n", cmd);
+                return REPLY_ERROR;
+            }
+
+            errno = 0;
+
+            if (fwrite(reply, sizeof(char), len, file) < (unsigned long)len)
+            {
+                fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
+                return REPLY_ERROR;
+            }
         }
 
         errno = 0;

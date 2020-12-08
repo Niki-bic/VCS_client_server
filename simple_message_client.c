@@ -291,7 +291,7 @@ static long handle_reply(FILE *const file_read)
             {
                 break;
             }
-            else
+            else // error
             {
                 fprintf(stderr, "%s: Error in fgets\n", cmd);
                 return REPLY_ERROR;

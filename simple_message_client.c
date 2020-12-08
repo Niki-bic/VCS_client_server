@@ -297,6 +297,8 @@ static long handle_reply(FILE *const file_read)
                 fprintf(stderr, "%s: Error in fgets\n", cmd);
                 return REPLY_ERROR;
             }
+
+            return REPLY_ERROR;
         }
 
         if (strncmp(reply, "file=", 5) != 0) // "file=" should be first, if not eat chunks

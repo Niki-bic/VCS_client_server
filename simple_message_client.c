@@ -11,14 +11,14 @@
 #include <simple_message_client_commandline_handling.h>
 #include "client_server.h"
 
-/**reply maximum buffer length*/
-#define BUF_LEN 8192
-/**filename maximum length*/
-#define MAX_NAME_LEN 256
-/**reply error value*/
-#define REPLY_ERROR -3l
+/** reply maximum buffer length*/
+#define BUF_LEN 4096 // this ensures the default replys are read in at once
+/** filename maximum length*/
+#define MAX_NAME_LEN 256 // as defined in simple_message_
+/** reply error value*/
+#define REPLY_ERROR -3l // simple_message_server_logic doesn't use this
 
-/**global storage for argv[0] */
+/** global storage for argv[0] */
 const char *cmd = NULL;
 
 /**
@@ -29,7 +29,7 @@ const char *cmd = NULL;
  *
  * \param file_read - read from stream
  *
- * \return status value
+ * \return status value or REPLY_ERROR on error
 */
 
 static long handle_reply(FILE *const file_read);
@@ -43,7 +43,7 @@ static long handle_reply(FILE *const file_read);
  * \param socket_write socket write stream
  * \param file_read file read stream
  * \param file_write file write stream
- * \param exitcode 
+ * \param exitcode the desired exitcode
  *
  * \return no return
 */
@@ -55,7 +55,7 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
  * \brief strol_e - errorchecked strol 
  * @details this function checks  possible errors of strlol and returns the converted long number when sucessful
  *
- * \param string string converted to long 
+ * \param string string to be converted
  *
  *
  * \return long value
@@ -69,7 +69,7 @@ static long strtol_e(const char *const string);
  *
  * \param stream output stream where the usage is written
  * \param cmnd program name
- * \param exitcode
+ * \param exitcode the desired exitcode
  
  * \return no return
 */
@@ -99,13 +99,6 @@ int main(const int argc, const char *const *argv)
     const char *img_url = NULL;
     int verbose = FALSE;
 
-    smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
-
-    if (verbose == TRUE)
-    {
-        usage(stdout, argv[0], EXIT_SUCCESS);
-    }
-
     struct addrinfo hints;
     struct addrinfo *result = NULL;
     struct addrinfo *res_ptr = NULL;
@@ -117,6 +110,13 @@ int main(const int argc, const char *const *argv)
     FILE *file_read = NULL;
 
     long status = -1;
+
+    smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
+
+    if (verbose == TRUE)
+    {
+        usage(stdout, argv[0], EXIT_SUCCESS);
+    }
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
@@ -131,19 +131,30 @@ int main(const int argc, const char *const *argv)
 
     for (res_ptr = result; res_ptr != NULL; res_ptr = res_ptr->ai_next)
     {
-        socket_write = socket(res_ptr->ai_family, res_ptr->ai_socktype, res_ptr->ai_protocol);
+        errno = 0;
 
-        if (socket_write == -1)
+        if ((socket_write = socket(res_ptr->ai_family, res_ptr->ai_socktype, res_ptr->ai_protocol)) == -1)
         {
+            fprintf(stderr, "%s: Error in socket: %s\n", cmd, strerror(errno));
             continue;
         }
+
+        errno = 0;
 
         if (connect(socket_write, res_ptr->ai_addr, res_ptr->ai_addrlen) != -1)
         {
             break;
         }
 
-        remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+        fprintf(stderr, "%s: Error in connect: %s\n", cmd, strerror(errno));
+
+        errno = 0;
+
+        if (close(socket_write) == -1)
+        {
+            fprintf(stderr, "%s: Error in close: %s", cmd, strerror(errno));
+            return EXIT_FAILURE;
+        }
     }
 
     freeaddrinfo(result);
@@ -238,8 +249,8 @@ int main(const int argc, const char *const *argv)
 
 static long handle_reply(FILE *const file_read)
 {
-    char reply[BUF_LEN] = {'\0'};
-    char filename[MAX_NAME_LEN] = {'\0'};
+    char reply[BUF_LEN] = {'\0'};         // buffer for reply
+    char filename[MAX_NAME_LEN] = {'\0'}; // buffer for filename
 
     long status = 0;
     long len = 0;
@@ -276,10 +287,19 @@ static long handle_reply(FILE *const file_read)
     {
         if (fgets(reply, BUF_LEN, file_read) == NULL)
         {
-            break;
+            if (feof(file_read) != 0) // EOF?
+            {
+                break;
+            }
+
+            if (ferror(file_read) != 0)
+            {
+                fprintf(stderr, "%s: Error in fgets\n", cmd);
+                return REPLY_ERROR;
+            }
         }
 
-        if (strncmp(reply, "file=", 5) != 0)
+        if (strncmp(reply, "file=", 5) != 0) // "file=" should be first, if not eat chunks
         {
             continue;
         }
@@ -376,7 +396,7 @@ static long handle_reply(FILE *const file_read)
             fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
             return REPLY_ERROR;
         }
-    } // end while(TRUE)
+    } // end while
 
     return status;
 } // end handle_reply()
@@ -388,9 +408,10 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
 
     if (file_read != NULL)
     {
+        errno = 0;
         if (fclose(file_read) != 0)
         {
-            fprintf(stderr, "%s: Error while closing file\n", cmd);
+            fprintf(stderr, "%s: Error while closing file: %s\n", cmd, strerror(errno));
             exit_status = EXIT_FAILURE;
         }
         socket_read = -1;
@@ -398,9 +419,10 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
 
     if (file_write != NULL)
     {
+        errno = 0;
         if (fclose(file_write) != 0)
         {
-            fprintf(stderr, "%s: Error while closing file\n", cmd);
+            fprintf(stderr, "%s: Error while closing file: %s\n", cmd, strerror(errno));
             exit_status = EXIT_FAILURE;
         }
         socket_write = -1;
@@ -408,18 +430,20 @@ static void remove_resources_and_exit(int socket_read, int socket_write, FILE *c
 
     if (socket_read != -1)
     {
+        errno = 0;
         if (close(socket_read) != 0)
         {
-            fprintf(stderr, "%s: Error while closing socket\n", cmd);
+            fprintf(stderr, "%s: Error while closing socket: %s\n", cmd, strerror(errno));
             exit_status = EXIT_FAILURE;
         }
     }
 
     if (socket_write != -1)
     {
+        errno = 0;
         if (close(socket_write) != 0)
         {
-            fprintf(stderr, "%s: Error while closing socket\n", cmd);
+            fprintf(stderr, "%s: Error while closing socket: %s\n", cmd, strerror(errno));
             exit_status = EXIT_FAILURE;
         }
     }

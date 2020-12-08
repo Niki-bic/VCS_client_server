@@ -7,15 +7,16 @@
 * @date 2020/12/06
 */
 
+#include "client_server.h"
+#include <getopt.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include "client_server.h"
 
 #define BACKLOG 10
-/** defines TRUE 1*/
-#define TRUE 1
 /** defines FALSE 0*/
 #define FALSE 0
+/** defines TRUE 1*/
+#define TRUE 1
 
 /**global storage for argv[0] */
 const char *cmd = NULL;
@@ -100,10 +101,27 @@ int main(const int argc, const char *const *argv)
 {
     cmd = argv[0];
 
-    int c = -1;
+    int c = -1;  // "char" for getopt_long
+    int yes = 1; // for setsockopt
+    int pid = -1;
+
+    int socket_listen = -1;
+    int socket_connect = -1;
+
     char *port = NULL;
 
-    while ((c = getopt(argc, (char *const *)argv, "p:h")) != -1)
+    struct addrinfo hints;
+    struct addrinfo *result = NULL;
+    struct addrinfo *res_ptr = NULL;
+
+    struct sigaction sa;
+
+    struct option long_options[] = {
+        {"port", 1, NULL, 'p'},
+        {"help", 0, NULL, 'h'},
+        {0, 0, 0, 0}};
+
+    while ((c = getopt_long(argc, (char *const *)argv, "p:h", long_options, NULL)) != -1)
     {
         switch (c)
         {
@@ -118,19 +136,14 @@ int main(const int argc, const char *const *argv)
         case '?':
         default:
             usage(stderr, argv[0], EXIT_FAILURE);
+            break;
         }
     }
 
-    struct addrinfo hints;
-    struct addrinfo *result = NULL;
-    struct addrinfo *res_ptr = NULL;
-
-    struct sigaction sa;
-
-    int socket_listen = -1;
-    int socket_connect = -1;
-
-    int pid = -1;
+    if ((optind != argc) || (port == NULL))
+    {
+        usage(stderr, argv[0], EXIT_FAILURE);
+    }
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
@@ -152,10 +165,24 @@ int main(const int argc, const char *const *argv)
             continue;
         }
 
+        errno = 0;
+
+        if (setsockopt(socket_listen, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes)) == -1)
+        {
+            fprintf(stderr, "%s: Error in setsockopt: %s\n", cmd, strerror(errno));
+        }
+
+        errno = 0;
+
         if (bind(socket_listen, res_ptr->ai_addr, res_ptr->ai_addrlen) == -1)
         {
+            fprintf(stderr, "%s: Error in bind: %s\n", cmd, strerror(errno));
+
+            errno = 0;
+
             if (close(socket_listen) == -1)
             {
+                fprintf(stderr, "%s: Error in close: %s\n", cmd, strerror(errno));
                 freeaddrinfo(result);
                 return EXIT_FAILURE;
             }
@@ -167,14 +194,17 @@ int main(const int argc, const char *const *argv)
             break;
         }
 
+        errno = 0;
+
         if (close(socket_listen) == -1)
         {
+            fprintf(stderr, "%s: Error in close: %s\n", cmd, strerror(errno));
             freeaddrinfo(result);
             return EXIT_FAILURE;
         }
     }
 
-    freeaddrinfo(result);
+    freeaddrinfo(result); // don't need it anymore
 
     if (res_ptr == NULL)
     {
@@ -195,7 +225,7 @@ int main(const int argc, const char *const *argv)
 
     errno = 0;
 
-    if (sigaction(SIGCHLD, &sa, NULL) == -1)
+    if (sigaction(SIGCHLD, &sa, NULL) == -1) // SIGCHILD: child stopped or terminated
     {
         fprintf(stderr, "%s: Error in sigaction: %s\n", cmd, strerror(errno));
         remove_resources_and_exit(socket_listen, -1, EXIT_FAILURE);
@@ -207,9 +237,9 @@ int main(const int argc, const char *const *argv)
 
         if ((socket_connect = accept(socket_listen, res_ptr->ai_addr, &res_ptr->ai_addrlen)) == -1)
         {
-            if (errno == EINTR)
+            if (errno == EINTR) // don't abort on SIGCHILD
             {
-                continue;
+                continue; // not really necessary, just for clarity
             }
             else
             {
@@ -239,17 +269,18 @@ int main(const int argc, const char *const *argv)
             close_e(socket_connect);
 
             execlp("simple_message_server_logic", "simple_message_server_logic", (char *)NULL);
-            // error in execlp
+            // here only if an error in execlp occurs
 
+            fprintf(stderr, "%s: Error in execlp\n", cmd);
             remove_resources_and_exit(socket_listen, socket_connect, EXIT_FAILURE);
             break; // not necessary but emphasizes the end of case 0
 
         default: // parent
             close_e(socket_connect);
             break;
-        } // switch
+        } // end switch
 
-    } // end while(TRUE)
+    } // end while
 
 } // end main()
 
@@ -257,9 +288,10 @@ static void close_e(const int socket)
 {
     if (socket != -1)
     {
-        if (close(socket) != 0)
+        errno = 0;
+        if (close(socket) == -1)
         {
-            fprintf(stderr, "%s: Error while closing socket %d\n", cmd, socket);
+            fprintf(stderr, "%s: Error while closing socket %d: %s\n", cmd, socket, strerror(errno));
             exit(EXIT_FAILURE);
         }
     }
@@ -267,9 +299,10 @@ static void close_e(const int socket)
 
 static void dup2_e(int socket_old, int socket_new)
 {
+    errno = 0;
     if (dup2(socket_old, socket_new) == -1)
     {
-        fprintf(stderr, "%s: Error in dup2\n", cmd);
+        fprintf(stderr, "%s: Error in dup2: %s\n", cmd, strerror(errno));
         remove_resources_and_exit(socket_old, -1, EXIT_FAILURE);
     }
 } // end dup2_e()
@@ -292,18 +325,20 @@ static void remove_resources_and_exit(const int socket_listen,
 {
     if (socket_listen != -1)
     {
+        errno = 0;
         if (close(socket_listen) != 0)
         {
-            fprintf(stderr, "%s: Error while closing socket %d\n", cmd, socket_listen);
+            fprintf(stderr, "%s: Error while closing socket %d: %s\n", cmd, socket_listen, strerror(errno));
             exit(EXIT_FAILURE);
         }
     }
 
     if (socket_connect != -1)
     {
+        errno = 0;
         if (close(socket_connect) != 0)
         {
-            fprintf(stderr, "%s: Error while closing socket %d\n", cmd, socket_connect);
+            fprintf(stderr, "%s: Error while closing socket %d: %s\n", cmd, socket_connect, strerror(errno));
             exit(EXIT_FAILURE);
         }
     }

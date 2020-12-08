@@ -17,7 +17,7 @@
 
 CC     =  gcc
 CFLAGS = -Wall -Werror -Wextra -Wstrict-prototypes -Wformat=2 -pedantic \
-         -fno-common -ftrapv -O3 -g -c -std=gnu11 
+         -fno-common -ftrapv -O3 -g -c -std=gnu11 # -fsanitize=address
 TFLAGS = -lsimple_message_client_commandline_handling
 RM     =  rm -f
 

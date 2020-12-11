@@ -153,9 +153,10 @@ int main(const int argc, const char *const *argv)
         if (close(socket_write) == -1)
         {
             fprintf(stderr, "%s: Error in close: %s", cmd, strerror(errno));
+            freeaddrinfo(result);
             return EXIT_FAILURE;
         }
-    }
+    } // end for
 
     freeaddrinfo(result);
 
@@ -196,7 +197,7 @@ int main(const int argc, const char *const *argv)
     {
         if (fprintf(file_write, "user=%s\n%s\n", user, message) < 0)
         {
-            fprintf(stderr, "%s: Error writing in stream: %s\n", cmd, strerror(errno)); // error fprintf
+            fprintf(stderr, "%s: Error writing in stream: %s\n", cmd, strerror(errno));
             remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
         }
     }
@@ -207,7 +208,7 @@ int main(const int argc, const char *const *argv)
             fprintf(stderr, "%s: Error writing in stream: %s\n", cmd, strerror(errno));
             remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
         }
-    }
+    } // end if (img_url == NULL)
 
     errno = 0;
 
@@ -354,6 +355,8 @@ static long handle_reply(FILE *const file_read)
 
         while (len > BUF_LEN)
         {
+            errno = 0;
+
             if (fread(reply, sizeof(char), BUF_LEN, file_read) < BUF_LEN)
             {
                 fprintf(stderr, "%s: Error in fread\n", cmd);
@@ -369,10 +372,12 @@ static long handle_reply(FILE *const file_read)
             }
 
             len -= BUF_LEN;
-        }
+        } // end while (len > BUF_LEN)
 
         if (len > 0)
         {
+            errno = 0;
+
             if (fread(reply, sizeof(char), len, file_read) < (unsigned long)len)
             {
                 fprintf(stderr, "%s: Error in fread\n", cmd);
@@ -386,7 +391,7 @@ static long handle_reply(FILE *const file_read)
                 fprintf(stderr, "%s: Error writing in file %s: %s\n", cmd, filename, strerror(errno));
                 return REPLY_ERROR;
             }
-        }
+        } // end if (len > 0)
 
         errno = 0;
 
@@ -395,7 +400,7 @@ static long handle_reply(FILE *const file_read)
             fprintf(stderr, "%s: Error closing file %s: %s\n", cmd, filename, strerror(errno));
             return REPLY_ERROR;
         }
-    } // end while
+    } // end while (TRUE)
 
     return status;
 } // end handle_reply()

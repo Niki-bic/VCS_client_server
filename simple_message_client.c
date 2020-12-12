@@ -9,12 +9,13 @@
 
 #include <limits.h>
 #include <simple_message_client_commandline_handling.h>
+#include <stdarg.h>
 #include "client_server.h"
 
 /** reply maximum buffer length*/
 #define BUF_LEN 4096 // this ensures the default replys are read in at once
 /** filename maximum length*/
-#define MAX_NAME_LEN 256 // as defined in simple_message_
+#define MAX_NAME_LEN 256 // as defined in simple_message_server_logic
 /** reply error value*/
 #define REPLY_ERROR -3l // simple_message_server_logic doesn't use this
 
@@ -33,6 +34,19 @@ const char *cmd = NULL;
 */
 
 static long handle_reply(FILE *const file_read);
+
+/**
+ * \brief check printf output for errors
+ * @details this function checks if printf fails,
+ * if so it writes to standard error.
+ *
+ * @param string to print
+ * @param variable argument list
+ *
+ * @return void
+ */
+
+void printf_e(const char *string, ...);
 
 /**
  * \brief remove_resources_and_exit - closes the streams and checks for errors 
@@ -113,11 +127,6 @@ int main(const int argc, const char *const *argv)
 
     smc_parsecommandline(argc, argv, &usage, &server, &port, &user, &message, &img_url, &verbose);
 
-    if (verbose == TRUE)
-    {
-        usage(stdout, argv[0], EXIT_SUCCESS);
-    }
-
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_family = AF_UNSPEC;     // IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP
@@ -141,6 +150,11 @@ int main(const int argc, const char *const *argv)
 
         errno = 0;
 
+        if (verbose == TRUE)
+        {
+            printf_e("%s: connecting to server..\n", cmd);
+        }
+
         if (connect(socket_write, res_ptr->ai_addr, res_ptr->ai_addrlen) != -1)
         {
             break;
@@ -150,11 +164,14 @@ int main(const int argc, const char *const *argv)
 
         errno = 0;
 
-        if (close(socket_write) == -1)
+        if (socket_write != -1)
         {
-            fprintf(stderr, "%s: Error in close: %s", cmd, strerror(errno));
-            freeaddrinfo(result);
-            return EXIT_FAILURE;
+            if (close(socket_write) == -1)
+            {
+                fprintf(stderr, "%s: Error in close: %s", cmd, strerror(errno));
+                freeaddrinfo(result);
+                return EXIT_FAILURE;
+            }
         }
     } // end for
 
@@ -191,6 +208,11 @@ int main(const int argc, const char *const *argv)
     }
 
     errno = 0;
+
+    if (verbose == TRUE)
+    {
+        printf_e("%s: sending message...\n", cmd);
+    }
 
     // sending request
     if (img_url == NULL)
@@ -232,6 +254,11 @@ int main(const int argc, const char *const *argv)
     {
         fprintf(stderr, "%s: Error closing file failed: %s\n", cmd, strerror(errno));
         remove_resources_and_exit(socket_read, socket_write, file_read, file_write, EXIT_FAILURE);
+    }
+
+    if (verbose == TRUE)
+    {
+        printf_e("%s: receiving reply...\n", cmd);
     }
 
     // reading and handling reply
@@ -404,6 +431,19 @@ static long handle_reply(FILE *const file_read)
 
     return status;
 } // end handle_reply()
+
+void printf_e(const char *string, ...)
+{
+    va_list array;
+
+    va_start(array, string);
+    // Errorcheck
+    if (vprintf(string, array) < 0)
+    {
+        fprintf(stderr, "myfind: Error in vprintf()!\n");
+    }
+    va_end(array);
+} // end printf_e()
 
 static void remove_resources_and_exit(int socket_read, int socket_write, FILE *const file_read,
                                       FILE *const file_write, const int exitcode)
